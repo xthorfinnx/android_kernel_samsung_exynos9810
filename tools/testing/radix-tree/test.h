@@ -5,11 +5,11 @@
 
 struct item {
 	unsigned long index;
+	unsigned int order;
 };
 
-struct item *item_create(unsigned long index);
-int __item_insert(struct radix_tree_root *root, struct item *item,
-			unsigned order);
+struct item *item_create(unsigned long index, unsigned int order);
+int __item_insert(struct radix_tree_root *root, struct item *item);
 int item_insert(struct radix_tree_root *root, unsigned long index);
 int item_insert_order(struct radix_tree_root *root, unsigned long index,
 			unsigned order);
@@ -33,6 +33,7 @@ unsigned long find_item(struct radix_tree_root *, void *item);
 void tag_check(void);
 void multiorder_checks(void);
 void iteration_test(void);
+void benchmark(void);
 
 struct item *
 item_tag_set(struct radix_tree_root *root, unsigned long index, int tag);
@@ -50,3 +51,9 @@ void radix_tree_dump(struct radix_tree_root *root);
 int root_tag_get(struct radix_tree_root *root, unsigned int tag);
 unsigned long node_maxindex(struct radix_tree_node *);
 unsigned long shift_maxindex(unsigned int shift);
+int radix_tree_cpu_dead(unsigned int cpu);
+struct radix_tree_preload {
+	unsigned nr;
+	struct radix_tree_node *nodes;
+};
+extern struct radix_tree_preload radix_tree_preloads;
