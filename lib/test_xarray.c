@@ -863,6 +863,134 @@ static noinline void check_create_range(struct xarray *xa)
 	check_create_range_3();
 }
 
+<<<<<<< HEAD
+=======
+static noinline void __check_store_range(struct xarray *xa, unsigned long first,
+		unsigned long last)
+{
+#ifdef CONFIG_XARRAY_MULTI
+	xa_store_range(xa, first, last, xa_mk_value(first), GFP_KERNEL);
+
+	XA_BUG_ON(xa, xa_load(xa, first) != xa_mk_value(first));
+	XA_BUG_ON(xa, xa_load(xa, last) != xa_mk_value(first));
+	XA_BUG_ON(xa, xa_load(xa, first - 1) != NULL);
+	XA_BUG_ON(xa, xa_load(xa, last + 1) != NULL);
+
+	xa_store_range(xa, first, last, NULL, GFP_KERNEL);
+#endif
+
+	XA_BUG_ON(xa, !xa_empty(xa));
+}
+
+static noinline void check_store_range(struct xarray *xa)
+{
+	unsigned long i, j;
+
+	for (i = 0; i < 128; i++) {
+		for (j = i; j < 128; j++) {
+			__check_store_range(xa, i, j);
+			__check_store_range(xa, 128 + i, 128 + j);
+			__check_store_range(xa, 4095 + i, 4095 + j);
+			__check_store_range(xa, 4096 + i, 4096 + j);
+			__check_store_range(xa, 123456 + i, 123456 + j);
+			__check_store_range(xa, UINT_MAX + i, UINT_MAX + j);
+		}
+	}
+}
+
+static LIST_HEAD(shadow_nodes);
+
+static void test_update_node(struct xa_node *node)
+{
+	if (node->count && node->count == node->nr_values) {
+		if (list_empty(&node->private_list))
+			list_add(&shadow_nodes, &node->private_list);
+	} else {
+		if (!list_empty(&node->private_list))
+			list_del_init(&node->private_list);
+	}
+}
+
+static noinline void shadow_remove(struct xarray *xa)
+{
+	struct xa_node *node;
+
+	xa_lock(xa);
+	while ((node = list_first_entry_or_null(&shadow_nodes,
+					struct xa_node, private_list))) {
+		XA_STATE(xas, node->array, 0);
+		XA_BUG_ON(xa, node->array != xa);
+		list_del_init(&node->private_list);
+		xas.xa_node = xa_parent_locked(node->array, node);
+		xas.xa_offset = node->offset;
+		xas.xa_shift = node->shift + XA_CHUNK_SHIFT;
+		xas_set_update(&xas, test_update_node);
+		xas_store(&xas, NULL);
+	}
+	xa_unlock(xa);
+}
+
+static noinline void check_workingset(struct xarray *xa, unsigned long index)
+{
+	XA_STATE(xas, xa, index);
+	xas_set_update(&xas, test_update_node);
+
+	do {
+		xas_lock(&xas);
+		xas_store(&xas, xa_mk_value(0));
+		xas_next(&xas);
+		xas_store(&xas, xa_mk_value(1));
+		xas_unlock(&xas);
+	} while (xas_nomem(&xas, GFP_KERNEL));
+
+	XA_BUG_ON(xa, list_empty(&shadow_nodes));
+
+	xas_lock(&xas);
+	xas_next(&xas);
+	xas_store(&xas, &xas);
+	XA_BUG_ON(xa, !list_empty(&shadow_nodes));
+
+	xas_store(&xas, xa_mk_value(2));
+	xas_unlock(&xas);
+	XA_BUG_ON(xa, list_empty(&shadow_nodes));
+
+	shadow_remove(xa);
+	XA_BUG_ON(xa, !list_empty(&shadow_nodes));
+	XA_BUG_ON(xa, !xa_empty(xa));
+}
+
+/*
+ * Check that the pointer / value / sibling entries are accounted the
+ * way we expect them to be.
+ */
+static noinline void check_account(struct xarray *xa)
+{
+#ifdef CONFIG_XARRAY_MULTI
+	unsigned int order;
+
+	for (order = 1; order < 12; order++) {
+		XA_STATE(xas, xa, 1 << order);
+
+		xa_store_order(xa, 0, order, xa, GFP_KERNEL);
+		xas_load(&xas);
+		XA_BUG_ON(xa, xas.xa_node->count == 0);
+		XA_BUG_ON(xa, xas.xa_node->count > (1 << order));
+		XA_BUG_ON(xa, xas.xa_node->nr_values != 0);
+
+		xa_store_order(xa, 1 << order, order, xa_mk_value(1 << order),
+				GFP_KERNEL);
+		XA_BUG_ON(xa, xas.xa_node->count != xas.xa_node->nr_values * 2);
+
+		xa_erase(xa, 1 << order);
+		XA_BUG_ON(xa, xas.xa_node->nr_values != 0);
+
+		xa_erase(xa, 0);
+		XA_BUG_ON(xa, !xa_empty(xa));
+	}
+#endif
+}
+
+>>>>>>> 0e9446c35a80 (xarray: Add range store functionality)
 static noinline void check_destroy(struct xarray *xa)
 {
 	unsigned long index;
@@ -914,6 +1042,7 @@ static int xarray_checks(void)
 	check_destroy(&array);
 	check_move(&array);
 	check_create_range(&array);
+	check_store_range(&array);
 	check_store_iter(&array);
 
 	printk("XArray: %u of %u tests passed\n", tests_passed, tests_run);
