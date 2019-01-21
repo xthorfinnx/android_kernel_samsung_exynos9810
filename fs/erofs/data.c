@@ -14,14 +14,14 @@ static inline void read_endio(struct bio *bio)
 	struct super_block *const sb = bio->bi_private;
 	struct bio_vec *bvec;
 	blk_status_t err = bio->bi_status;
-	struct bvec_iter_all iter_all;
+	int i;
 
 	if (time_to_inject(EROFS_SB(sb), FAULT_READ_IO)) {
 		erofs_show_injection_info(FAULT_READ_IO);
 		err = BLK_STS_IOERR;
 	}
 
-	bio_for_each_segment_all(bvec, bio, iter_all) {
+	bio_for_each_segment_all(bvec, bio, i) {
 		struct page *page = bvec->bv_page;
 
 		/* page is already locked */

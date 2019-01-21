@@ -51,7 +51,7 @@ static struct inode *alloc_inode(struct super_block *sb)
 	return &vi->vfs_inode;
 }
 
-static void free_inode(struct inode *inode)
+static void erofs_destroy_inode(struct inode *inode)
 {
 	struct erofs_vnode *vi = EROFS_V(inode);
 
@@ -420,7 +420,7 @@ static int erofs_fill_super(struct super_block *sb, void *data, int silent)
 	if (err)
 		return err;
 
-	sb->s_flags |= SB_RDONLY | SB_NOATIME;
+	sb->s_flags |= MS_RDONLY | MS_NOATIME;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 	sb->s_time_gran = 1;
 
@@ -440,9 +440,9 @@ static int erofs_fill_super(struct super_block *sb, void *data, int silent)
 		infoln("root inode @ nid %llu", ROOT_NID(sbi));
 
 	if (test_opt(sbi, POSIX_ACL))
-		sb->s_flags |= SB_POSIXACL;
+		sb->s_flags |= MS_POSIXACL;
 	else
-		sb->s_flags &= ~SB_POSIXACL;
+		sb->s_flags &= ~MS_POSIXACL;
 
 #ifdef CONFIG_EROFS_FS_ZIP
 	INIT_RADIX_TREE(&sbi->workstn_tree, GFP_ATOMIC);
@@ -632,17 +632,17 @@ static int erofs_remount(struct super_block *sb, int *flags, char *data)
 	unsigned int org_inject_rate = erofs_get_fault_rate(sbi);
 	int err;
 
-	DBG_BUGON(!sb_rdonly(sb));
+	DBG_BUGON(!(sb->s_flags & MS_RDONLY));
 	err = parse_options(sb, data);
 	if (err)
 		goto out;
 
 	if (test_opt(sbi, POSIX_ACL))
-		sb->s_flags |= SB_POSIXACL;
+		sb->s_flags |= MS_POSIXACL;
 	else
-		sb->s_flags &= ~SB_POSIXACL;
+		sb->s_flags &= ~MS_POSIXACL;
 
-	*flags |= SB_RDONLY;
+	*flags |= MS_RDONLY;
 	return 0;
 out:
 	__erofs_build_fault_attr(sbi, org_inject_rate);
@@ -654,7 +654,7 @@ out:
 const struct super_operations erofs_sops = {
 	.put_super = erofs_put_super,
 	.alloc_inode = alloc_inode,
-	.free_inode = free_inode,
+	.destroy_inode = erofs_destroy_inode,
 	.statfs = erofs_statfs,
 	.show_options = erofs_show_options,
 	.remount_fs = erofs_remount,
