@@ -712,6 +712,9 @@ struct readahead_control {
 	unsigned int _batch_count;
 };
 
+void readahead_expand(struct readahead_control *ractl,
+		      loff_t new_start, size_t new_len);
+
 /**
  * readahead_page - Get the next page to read.
  * @rac: The current readahead request.
