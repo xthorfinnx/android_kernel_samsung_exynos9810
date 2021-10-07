@@ -339,15 +339,15 @@ out:
 static void erofs_default_options(struct erofs_fs_context *ctx)
 {
 #ifdef CONFIG_EROFS_FS_ZIP
-	ctx->cache_strategy = EROFS_ZIP_CACHE_READAROUND;
-	ctx->max_sync_decompress_pages = 3;
-	ctx->readahead_sync_decompress = false;
+	ctx->opt.cache_strategy = EROFS_ZIP_CACHE_READAROUND;
+	ctx->opt.max_sync_decompress_pages = 3;
+	ctx->opt.readahead_sync_decompress = false;
 #endif
 #ifdef CONFIG_EROFS_FS_XATTR
-	set_opt(ctx, XATTR_USER);
+	set_opt(&ctx->opt, XATTR_USER);
 #endif
 #ifdef CONFIG_EROFS_FS_POSIX_ACL
-	set_opt(ctx, POSIX_ACL);
+	set_opt(&ctx->opt, POSIX_ACL);
 #endif
 }
 
@@ -388,9 +388,9 @@ static int erofs_fc_parse_param(struct fs_context *fc,
 	case Opt_user_xattr:
 #ifdef CONFIG_EROFS_FS_XATTR
 		if (result.boolean)
-			set_opt(ctx, XATTR_USER);
+			set_opt(&ctx->opt, XATTR_USER);
 		else
-			clear_opt(ctx, XATTR_USER);
+			clear_opt(&ctx->opt, XATTR_USER);
 #else
 		errorfc(fc, "{,no}user_xattr options not supported");
 #endif
@@ -398,16 +398,16 @@ static int erofs_fc_parse_param(struct fs_context *fc,
 	case Opt_acl:
 #ifdef CONFIG_EROFS_FS_POSIX_ACL
 		if (result.boolean)
-			set_opt(ctx, POSIX_ACL);
+			set_opt(&ctx->opt, POSIX_ACL);
 		else
-			clear_opt(ctx, POSIX_ACL);
+			clear_opt(&ctx->opt, POSIX_ACL);
 #else
 		errorfc(fc, "{,no}acl options not supported");
 #endif
 		break;
 	case Opt_cache_strategy:
 #ifdef CONFIG_EROFS_FS_ZIP
-		ctx->cache_strategy = result.uint_32;
+		ctx->opt.cache_strategy = result.uint_32;
 #else
 		errorfc(fc, "compression not supported, cache_strategy ignored");
 #endif
@@ -496,6 +496,7 @@ static int erofs_fc_fill_super(struct super_block *sb, struct fs_context *fc)
 		return -ENOMEM;
 
 	sb->s_fs_info = sbi;
+	sbi->opt = ctx->opt;
 	err = erofs_read_superblock(sb);
 	if (err)
 		return err;
@@ -507,12 +508,10 @@ static int erofs_fc_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_op = &erofs_sops;
 	sb->s_xattr = erofs_xattr_handlers;
 
-	if (test_opt(ctx, POSIX_ACL))
+	if (test_opt(&sbi->opt, POSIX_ACL))
 		sb->s_flags |= MS_POSIXACL;
 	else
 		sb->s_flags &= ~MS_POSIXACL;
-
-	sbi->ctx = *ctx;
 
 #ifdef CONFIG_EROFS_FS_ZIP
 	xa_init(&sbi->managed_pslots);
@@ -557,12 +556,12 @@ static int erofs_fc_reconfigure(struct fs_context *fc)
 
 	DBG_BUGON(!(sb->s_flags & MS_RDONLY));
 
-	if (test_opt(ctx, POSIX_ACL))
+	if (test_opt(&ctx->opt, POSIX_ACL))
 		fc->sb_flags |= MS_POSIXACL;
 	else
 		fc->sb_flags &= ~MS_POSIXACL;
 
-	sbi->ctx = *ctx;
+	sbi->opt = ctx->opt;
 
 	fc->sb_flags |= MS_RDONLY;
 	return 0;
@@ -590,7 +589,6 @@ static int erofs_init_fs_context(struct fs_context *fc)
 	erofs_default_options(fc->fs_private);
 
 	fc->ops = &erofs_context_ops;
-
 	return 0;
 }
 
@@ -712,27 +710,27 @@ static int erofs_statfs(struct dentry *dentry, struct kstatfs *buf)
 
 static int erofs_show_options(struct seq_file *seq, struct dentry *root)
 {
-	struct erofs_sb_info *sbi __maybe_unused = EROFS_SB(root->d_sb);
-	struct erofs_fs_context *ctx __maybe_unused = &sbi->ctx;
+	struct erofs_sb_info *sbi = EROFS_SB(root->d_sb);
+	struct erofs_mount_opts *opt = &sbi->opt;
 
 #ifdef CONFIG_EROFS_FS_XATTR
-	if (test_opt(ctx, XATTR_USER))
+	if (test_opt(opt, XATTR_USER))
 		seq_puts(seq, ",user_xattr");
 	else
 		seq_puts(seq, ",nouser_xattr");
 #endif
 #ifdef CONFIG_EROFS_FS_POSIX_ACL
-	if (test_opt(ctx, POSIX_ACL))
+	if (test_opt(opt, POSIX_ACL))
 		seq_puts(seq, ",acl");
 	else
 		seq_puts(seq, ",noacl");
 #endif
 #ifdef CONFIG_EROFS_FS_ZIP
-	if (ctx->cache_strategy == EROFS_ZIP_CACHE_DISABLED)
+	if (opt->cache_strategy == EROFS_ZIP_CACHE_DISABLED)
 		seq_puts(seq, ",cache_strategy=disabled");
-	else if (ctx->cache_strategy == EROFS_ZIP_CACHE_READAHEAD)
+	else if (opt->cache_strategy == EROFS_ZIP_CACHE_READAHEAD)
 		seq_puts(seq, ",cache_strategy=readahead");
-	else if (ctx->cache_strategy == EROFS_ZIP_CACHE_READAROUND)
+	else if (opt->cache_strategy == EROFS_ZIP_CACHE_READAROUND)
 		seq_puts(seq, ",cache_strategy=readaround");
 #endif
 	return 0;
