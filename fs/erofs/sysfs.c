@@ -179,7 +179,7 @@ static struct kobj_type erofs_sb_ktype = {
 	.release	= erofs_sb_release,
 };
 
-static struct kobj_type erofs_ktype = {
+static const struct kobj_type erofs_ktype = {
 	.sysfs_ops	= &erofs_attr_ops,
 };
 
