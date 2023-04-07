@@ -138,9 +138,9 @@ struct erofs_sb_info {
 	struct inode *managed_cache;
 
 	struct erofs_sb_lz4_info lz4;
-	struct inode *packed_inode;
 #endif	/* CONFIG_EROFS_FS_ZIP */
 	u32 blocks;
+	struct inode *packed_inode;
 	struct erofs_dev_context *devs;
 	struct dax_device *dax_dev;
 	u64 total_blocks;
