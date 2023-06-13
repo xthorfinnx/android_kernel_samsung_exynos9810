@@ -38,6 +38,17 @@ static inline const struct xattr_handler *erofs_xattr_handler(unsigned int idx)
 		xattr_handler_map[idx] : NULL;
 }
 
+/* v6.x erofs_xattr_prefix(), on top of this tree's xattr handler helpers */
+static inline const char *erofs_xattr_prefix(unsigned int idx,
+					     struct dentry *dentry)
+{
+	const struct xattr_handler *h = erofs_xattr_handler(idx);
+
+	if (!h || (h->list && !h->list(dentry)))
+		return NULL;
+	return xattr_prefix(h);
+}
+
 extern const struct xattr_handler *erofs_xattr_handlers[];
 
 int erofs_xattr_prefixes_init(struct super_block *sb);
