@@ -521,17 +521,13 @@ static void z_erofs_bind_cache(struct z_erofs_decompress_frontend *fe)
 
 	for (i = 0; i < pclusterpages; ++i) {
 		struct page *page, *newpage;
-		void *t;	/* mark pages just found for debugging */
 
 		/* Inaccurate check w/o locking to avoid unneeded lookups */
 		if (READ_ONCE(pcl->compressed_bvecs[i].page))
 			continue;
 
 		page = find_get_page(mc, pcl->obj.index + i);
-		if (page) {
-			t = (void *)((unsigned long)page | 1);
-			newpage = NULL;
-		} else {
+		if (!page) {
 			/* I/O is needed, no possible to decompress directly */
 			standalone = false;
 			if (!shouldalloc)
@@ -545,11 +541,10 @@ static void z_erofs_bind_cache(struct z_erofs_decompress_frontend *fe)
 			if (!newpage)
 				continue;
 			set_page_private(newpage, Z_EROFS_PREALLOCATED_PAGE);
-			t = (void *)((unsigned long)newpage | 1);
 		}
 		spin_lock(&pcl->obj.lockref.lock);
 		if (!pcl->compressed_bvecs[i].page) {
-			pcl->compressed_bvecs[i].page = t;
+			pcl->compressed_bvecs[i].page = page ? page : newpage;
 			spin_unlock(&pcl->obj.lockref.lock);
 			continue;
 		}
@@ -1396,7 +1391,7 @@ static void z_erofs_fill_bio_vec(struct bio_vec *bvec,
 	struct z_erofs_bvec zbv;
 	struct address_space *mapping;
 	struct page *page;
-	int justfound, bs = i_blocksize(f->inode);
+	int bs = i_blocksize(f->inode);
 
 	/* Except for inplace pages, the entire page can be used for I/Os */
 	bvec->bv_offset = 0;
@@ -1405,9 +1400,6 @@ repeat:
 	spin_lock(&pcl->obj.lockref.lock);
 	zbv = pcl->compressed_bvecs[nr];
 	page = zbv.page;
-	justfound = (unsigned long)page & 1UL;
-	page = (struct page *)((unsigned long)page & ~1UL);
-	pcl->compressed_bvecs[nr].page = page;
 	spin_unlock(&pcl->obj.lockref.lock);
 	if (!page)
 		goto out_allocpage;
@@ -1438,9 +1430,6 @@ repeat:
 	}
 
 	lock_page(page);
-	/* only true if page reclaim goes wrong, should never happen */
-	DBG_BUGON(justfound && PagePrivate(page));
-
 	/* the cached page is still in managed cache */
 	if (page->mapping == mc) {
 		/*
@@ -1448,7 +1437,6 @@ repeat:
 		 * `->private` pcluster hint.  Let's reconnect them.
 		 */
 		if (!PagePrivate(page)) {
-			DBG_BUGON(!justfound);
 			/* compressed_bvecs[] already takes a ref */
 			attach_page_private(page, pcl);
 			put_page(page);
@@ -1467,8 +1455,6 @@ repeat:
 	 * allocate a new page for compressed data.
 	 */
 	DBG_BUGON(page->mapping);
-	DBG_BUGON(!justfound);
-
 	tocache = true;
 	unlock_page(page);
 	put_page(page);
