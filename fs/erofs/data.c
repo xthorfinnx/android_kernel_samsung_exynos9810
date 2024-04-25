@@ -34,7 +34,6 @@ void erofs_put_metabuf(struct erofs_buf *buf)
 void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset,
 		  enum erofs_kmap_type type)
 {
-	struct inode *inode = buf->inode;
 	pgoff_t index = offset >> PAGE_SHIFT;
 	struct page *page = buf->page;
 	struct folio *folio;
@@ -44,7 +43,7 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset,
 		erofs_put_metabuf(buf);
 
 		nofs_flag = memalloc_nofs_save();
-		folio = read_cache_folio(inode->i_mapping, index, NULL, NULL);
+		folio = read_cache_folio(buf->mapping, index, NULL, NULL);
 		memalloc_nofs_restore(nofs_flag);
 		if (IS_ERR(folio))
 			return folio;
@@ -69,9 +68,9 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset,
 void erofs_init_metabuf(struct erofs_buf *buf, struct super_block *sb)
 {
 	if (erofs_is_fscache_mode(sb))
-		buf->inode = EROFS_SB(sb)->s_fscache->inode;
+		buf->mapping = EROFS_SB(sb)->s_fscache->inode->i_mapping;
 	else
-		buf->inode = sb->s_bdev->bd_inode;
+		buf->mapping = sb->s_bdev->bd_inode->i_mapping;
 }
 
 void *erofs_read_metabuf(struct erofs_buf *buf, struct super_block *sb,
