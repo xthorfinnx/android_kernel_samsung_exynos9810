@@ -896,7 +896,7 @@ static void z_erofs_pcluster_end(struct z_erofs_decompress_frontend *fe)
 	fe->pcl = NULL;
 }
 
-static int z_erofs_read_fragment(struct super_block *sb, struct page *page,
+static int z_erofs_read_fragment(struct super_block *sb, struct folio *folio,
 			unsigned int cur, unsigned int end, erofs_off_t pos)
 {
 	struct inode *packed_inode = EROFS_SB(sb)->packed_inode;
@@ -909,14 +909,13 @@ static int z_erofs_read_fragment(struct super_block *sb, struct page *page,
 
 	buf.mapping = packed_inode->i_mapping;
 	for (; cur < end; cur += cnt, pos += cnt) {
-		cnt = min_t(unsigned int, end - cur,
-			    sb->s_blocksize - erofs_blkoff(sb, pos));
+		cnt = min(end - cur, sb->s_blocksize - erofs_blkoff(sb, pos));
 		src = erofs_bread(&buf, pos, EROFS_KMAP);
 		if (IS_ERR(src)) {
 			erofs_put_metabuf(&buf);
 			return PTR_ERR(src);
 		}
-		memcpy_to_page(page, cur, src, cnt);
+		memcpy_to_folio(folio, cur, src, cnt);
 	}
 	erofs_put_metabuf(&buf);
 	return 0;
@@ -930,7 +929,7 @@ static int z_erofs_scan_folio(struct z_erofs_decompress_frontend *fe,
 	const loff_t offset = folio_pos(folio);
 	const unsigned int bs = i_blocksize(inode), fs = folio_size(folio);
 	bool tight = true, exclusive;
-	unsigned int cur, end, len, split;
+	unsigned int cur, end, split;
 	int err = 0;
 
 	z_erofs_onlinefolio_init(folio);
@@ -960,9 +959,9 @@ repeat:
 	if (map->m_flags & EROFS_MAP_FRAGMENT) {
 		erofs_off_t fpos = offset + cur - map->m_la;
 
-		len = min_t(unsigned int, map->m_llen - fpos, end - cur);
-		err = z_erofs_read_fragment(inode->i_sb, &folio->page, cur,
-			cur + len, EROFS_I(inode)->z_fragmentoff + fpos);
+		err = z_erofs_read_fragment(inode->i_sb, folio, cur,
+				cur + min(map->m_llen - fpos, end - cur),
+				EROFS_I(inode)->z_fragmentoff + fpos);
 		if (err)
 			goto out;
 		tight = false;
