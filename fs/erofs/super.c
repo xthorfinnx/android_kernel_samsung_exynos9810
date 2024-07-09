@@ -839,15 +839,7 @@ static int __init erofs_module_init(void)
 	if (err)
 		goto shrinker_err;
 
-	err = z_erofs_lzma_init();
-	if (err)
-		goto lzma_err;
-
-	err = z_erofs_gbuf_init();
-	if (err)
-		goto gbuf_err;
-
-	err = z_erofs_init_zip_subsystem();
+	err = z_erofs_init_subsystem();
 	if (err)
 		goto zip_err;
 
@@ -864,12 +856,8 @@ static int __init erofs_module_init(void)
 fs_err:
 	erofs_exit_sysfs();
 sysfs_err:
-	z_erofs_exit_zip_subsystem();
+	z_erofs_exit_subsystem();
 zip_err:
-	z_erofs_gbuf_exit();
-gbuf_err:
-	z_erofs_lzma_exit();
-lzma_err:
 	erofs_exit_shrinker();
 shrinker_err:
 	kmem_cache_destroy(erofs_inode_cachep);
@@ -884,11 +872,9 @@ static void __exit erofs_module_exit(void)
 	rcu_barrier();
 
 	erofs_exit_sysfs();
-	z_erofs_exit_zip_subsystem();
-	z_erofs_lzma_exit();
+	z_erofs_exit_subsystem();
 	erofs_exit_shrinker();
 	kmem_cache_destroy(erofs_inode_cachep);
-	z_erofs_gbuf_exit();
 }
 
 static int erofs_statfs(struct dentry *dentry, struct kstatfs *buf)
