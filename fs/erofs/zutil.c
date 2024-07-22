@@ -39,11 +39,13 @@ void *z_erofs_get_gbuf(unsigned int requiredpages)
 {
 	struct z_erofs_gbuf *gbuf;
 
+	migrate_disable();
 	gbuf = &z_erofs_gbufpool[z_erofs_gbuf_id()];
 	spin_lock(&gbuf->lock);
 	/* check if the buffer is too small */
 	if (requiredpages > gbuf->nrpages) {
 		spin_unlock(&gbuf->lock);
+		migrate_enable();
 		/* (for sparse checker) pretend gbuf->lock is still taken */
 		__acquire(gbuf->lock);
 		return NULL;
@@ -58,6 +60,7 @@ void z_erofs_put_gbuf(void *ptr) __releases(gbuf->lock)
 	gbuf = &z_erofs_gbufpool[z_erofs_gbuf_id()];
 	DBG_BUGON(gbuf->ptr != ptr);
 	spin_unlock(&gbuf->lock);
+	migrate_enable();
 }
 
 /*
