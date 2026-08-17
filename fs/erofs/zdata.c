@@ -1007,8 +1007,8 @@ static int z_erofs_decompress_pcluster(struct super_block *sb,
 		if (nr_pages > Z_EROFS_VMAP_GLOBAL_PAGES)
 			gfp_flags |= __GFP_NOFAIL;
 
-		pages = kvmalloc_array(nr_pages, sizeof(struct page *),
-				       gfp_flags);
+		pages = kmalloc_array(nr_pages, sizeof(struct page *),
+				      gfp_flags);
 
 		/* fallback to global pagemap for the lowmem scenario */
 		if (!pages) {
@@ -1338,7 +1338,7 @@ jobqueue_init(struct super_block *sb,
 	struct z_erofs_decompressqueue *q;
 
 	if (fg && !*fg) {
-		q = kvzalloc(sizeof(*q), GFP_KERNEL | __GFP_NOWARN);
+		q = kzalloc(sizeof(*q), GFP_KERNEL | __GFP_NOWARN);
 		if (!q) {
 			*fg = true;
 			goto fg_out;
