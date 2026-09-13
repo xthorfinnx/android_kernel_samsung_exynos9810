@@ -3533,6 +3533,7 @@ static void ffs_func_unbind(struct usb_configuration *c,
 static struct usb_function *ffs_alloc(struct usb_function_instance *fi)
 {
 	struct ffs_function *func;
+	struct f_fs_opts *opts = to_f_fs_opts(fi);
 
 	ENTER();
 
@@ -3540,7 +3541,13 @@ static struct usb_function *ffs_alloc(struct usb_function_instance *fi)
 	if (unlikely(!func))
 		return ERR_PTR(-ENOMEM);
 
-	func->function.name    = "adb";
+	/*
+	 * Name the function after its configfs instance (e.g. "mtp" for
+	 * functions/ffs.mtp) instead of hardcoding "adb", so the legacy
+	 * android_usb functions_store() name lookup in configfs.c can match
+	 * FunctionFS-backed instances other than adb (e.g. ffs.mtp, ffs.ptp).
+	 */
+	func->function.name    = opts->dev->name;
 
 	func->function.bind    = ffs_func_bind;
 	func->function.unbind  = ffs_func_unbind;
