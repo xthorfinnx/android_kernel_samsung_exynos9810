@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2017-2018 HUAWEI, Inc.
- *             http://www.huawei.com/
- * Created by Gao Xiang <gaoxiang25@huawei.com>
+ *             https://www.huawei.com/
  */
 #include "xattr.h"
 
@@ -249,4 +248,3 @@ const struct inode_operations erofs_dir_iops = {
 #endif
 	.get_acl = erofs_get_acl,
 };
-

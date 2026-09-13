@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2017-2018 HUAWEI, Inc.
- *             http://www.huawei.com/
- * Created by Gao Xiang <gaoxiang25@huawei.com>
+ *             https://www.huawei.com/
  */
 #include "internal.h"
 #include <linux/prefetch.h>
@@ -400,4 +399,3 @@ const struct address_space_operations erofs_raw_access_aops = {
 	.direct_IO = erofs_direct_IO,
 	.bmap = erofs_bmap,
 };
-
