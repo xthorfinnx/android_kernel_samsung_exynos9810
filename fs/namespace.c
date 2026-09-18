@@ -26,6 +26,7 @@
 #include <linux/task_work.h>
 #include <linux/slub_def.h>
 #include <linux/fslog.h>
+#include <linux/fs_context.h>
 #include "pnode.h"
 #include "internal.h"
 
@@ -1218,66 +1219,70 @@ static struct mount *skip_mnt_tree(struct mount *p)
 	return p;
 }
 
-struct vfsmount *
-vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void *data)
+struct vfsmount *vfs_kern_mount(struct file_system_type *type,
+				int flags, const char *name,
+				void *data)
 {
+	struct fs_context *fc;
 	struct mount *mnt;
-	struct dentry *root;
+	int ret = 0;
 
 	if (!type)
 		return ERR_PTR(-ENODEV);
 
+	fc = fs_context_for_mount(type, flags);
+	if (IS_ERR(fc))
+		return ERR_CAST(fc);
+
 	mnt = alloc_vfsmnt(name);
-	if (!mnt)
+	if (!mnt) {
+		put_fs_context(fc);
 		return ERR_PTR(-ENOMEM);
-#ifdef CONFIG_RKP_NS_PROT
-		rkp_set_data(mnt->mnt,NULL);
-#else
-		mnt->mnt.data = NULL;
-#endif
+	}
+	mnt->mnt.data = NULL;
 	if (type->alloc_mnt_data) {
-#ifdef CONFIG_RKP_NS_PROT
-		rkp_set_data(mnt->mnt,type->alloc_mnt_data());
-		if (!mnt->mnt->data) {
-#else
 		mnt->mnt.data = type->alloc_mnt_data();
 		if (!mnt->mnt.data) {
-#endif
 			mnt_free_id(mnt);
 			free_vfsmnt(mnt);
+			put_fs_context(fc);
 			return ERR_PTR(-ENOMEM);
 		}
 	}
-	if (flags & MS_KERNMOUNT)
-#ifdef CONFIG_RKP_NS_PROT
-	rkp_set_mnt_flags(mnt->mnt,MNT_INTERNAL);
-	root = mount_fs(type, flags, name, mnt->mnt, data);
-#else
-	mnt->mnt.mnt_flags = MNT_INTERNAL;
-	root = mount_fs(type, flags, name, &mnt->mnt, data);
-#endif
-	if (IS_ERR(root)) {
+	/* seen by legacy ->mount2() (sdcardfs) during legacy_get_tree() below,
+	 * matching the pre-fs_context mount_fs() ordering */
+	fc->legacy_mnt = &mnt->mnt;
+
+	if (name) {
+		fc->source = kstrdup(name, GFP_KERNEL);
+		if (!fc->source)
+			ret = -ENOMEM;
+	}
+	if (!ret)
+		ret = parse_monolithic_mount_data(fc, data);
+	if (!ret)
+		ret = vfs_get_tree(fc);
+	if (ret) {
 		mnt_free_id(mnt);
 		free_vfsmnt(mnt);
-		return ERR_CAST(root);
+		put_fs_context(fc);
+		return ERR_PTR(ret);
 	}
-#ifdef CONFIG_RKP_NS_PROT
-	rkp_set_mnt_root_sb(mnt->mnt,root,root->d_sb);
-	mnt->mnt_mountpoint = mnt->mnt->mnt_root;
-#else
-	mnt->mnt.mnt_root = root;
-	mnt->mnt.mnt_sb = root->d_sb;
+	up_write(&fc->root->d_sb->s_umount);
+
+	if (flags & MS_KERNMOUNT)
+		mnt->mnt.mnt_flags = MNT_INTERNAL;
+
+	atomic_inc(&fc->root->d_sb->s_active);
+	mnt->mnt.mnt_root = dget(fc->root);
+	mnt->mnt.mnt_sb = fc->root->d_sb;
 	mnt->mnt_mountpoint = mnt->mnt.mnt_root;
-#endif	
 	mnt->mnt_parent = mnt;
 	lock_mount_hash();
-	list_add_tail(&mnt->mnt_instance, &root->d_sb->s_mounts);
+	list_add_tail(&mnt->mnt_instance, &fc->root->d_sb->s_mounts);
 	unlock_mount_hash();
-#ifdef CONFIG_RKP_NS_PROT
-	return mnt->mnt;
-#else
+	put_fs_context(fc);
 	return &mnt->mnt;
-#endif
 }
 EXPORT_SYMBOL_GPL(vfs_kern_mount);
 
