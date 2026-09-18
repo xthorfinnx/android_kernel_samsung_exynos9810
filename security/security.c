@@ -304,6 +304,22 @@ int security_sb_copy_data(char *orig, char *copy)
 }
 EXPORT_SYMBOL(security_sb_copy_data);
 
+int security_sb_eat_lsm_opts(char *options, struct security_mnt_opts *opts)
+{
+	char *secdata;
+	int err;
+
+	secdata = alloc_secdata();
+	if (!secdata)
+		return -ENOMEM;
+	err = security_sb_copy_data(options, secdata);
+	if (!err)
+		err = security_sb_parse_opts_str(secdata, opts);
+	free_secdata(secdata);
+	return err;
+}
+EXPORT_SYMBOL(security_sb_eat_lsm_opts);
+
 int security_sb_remount(struct super_block *sb, void *data)
 {
 	return call_int_hook(sb_remount, 0, sb, data);
