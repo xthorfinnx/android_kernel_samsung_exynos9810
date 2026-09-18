@@ -574,6 +574,190 @@ struct super_block *sget(struct file_system_type *type,
 
 EXPORT_SYMBOL(sget);
 
+/**
+ * sget_fc - Find or create a superblock
+ * @fc: Filesystem context.
+ * @test: Comparison callback
+ * @set: Setup callback
+ *
+ * fs_context-based counterpart of sget_userns(), used by ->get_tree()
+ * implementations (currently just get_tree_bdev() below). Adapted to this
+ * tree's older sget_userns()/destroy_super()/register_shrinker() shapes
+ * rather than upstream's later sget_fc()/destroy_unused_super()/
+ * register_shrinker_prepared() split; real upstream also keys off
+ * fc->global/fc->s_fs_info/fc->s_iflags; this tree's fs_context doesn't
+ * carry those (its only caller, get_tree_bdev(), keys off fc->sget_key via
+ * its own test()/set() callbacks instead).
+ */
+struct super_block *sget_fc(struct fs_context *fc,
+			    int (*test)(struct super_block *, struct fs_context *),
+			    int (*set)(struct super_block *, struct fs_context *))
+{
+	struct super_block *s = NULL;
+	struct super_block *old;
+	struct user_namespace *user_ns = fc->user_ns;
+	int err;
+
+	if (!(fc->sb_flags & (MS_KERNMOUNT|MS_SUBMOUNT)) &&
+	    !(fc->fs_type->fs_flags & FS_USERNS_MOUNT) &&
+	    !capable(CAP_SYS_ADMIN))
+		return ERR_PTR(-EPERM);
+retry:
+	spin_lock(&sb_lock);
+	if (test) {
+		hlist_for_each_entry(old, &fc->fs_type->fs_supers, s_instances) {
+			if (!test(old, fc))
+				continue;
+			if (user_ns != old->s_user_ns) {
+				spin_unlock(&sb_lock);
+				if (s) {
+					up_write(&s->s_umount);
+					destroy_super(s);
+				}
+				return ERR_PTR(-EBUSY);
+			}
+			if (!grab_super(old))
+				goto retry;
+			if (s) {
+				up_write(&s->s_umount);
+				destroy_super(s);
+				s = NULL;
+			}
+			return old;
+		}
+	}
+	if (!s) {
+		spin_unlock(&sb_lock);
+		s = alloc_super(fc->fs_type, (fc->sb_flags & ~MS_SUBMOUNT), user_ns);
+		if (!s)
+			return ERR_PTR(-ENOMEM);
+		goto retry;
+	}
+
+	err = set(s, fc);
+	if (err) {
+		spin_unlock(&sb_lock);
+		up_write(&s->s_umount);
+		destroy_super(s);
+		return ERR_PTR(err);
+	}
+	s->s_type = fc->fs_type;
+	strlcpy(s->s_id, fc->fs_type->name, sizeof(s->s_id));
+	list_add_tail(&s->s_list, &super_blocks);
+	hlist_add_head(&s->s_instances, &fc->fs_type->fs_supers);
+	spin_unlock(&sb_lock);
+	get_filesystem(fc->fs_type);
+	err = register_shrinker(&s->s_shrink);
+	if (err) {
+		deactivate_locked_super(s);
+		s = ERR_PTR(err);
+	}
+	return s;
+}
+EXPORT_SYMBOL(sget_fc);
+
+/*
+ * get_tree_bdev - Get a superblock based on a single block device
+ * @fc: The filesystem context holding the parameters
+ * @fill_super: Helper to initialise a new superblock
+ *
+ * Cherry picked, in spirit, from upstream commit fe62c3a4e17d, adapted to
+ * this tree's MS_-flag and destroy_super()/sget_fc() shapes.
+ */
+static int set_bdev_super_fc(struct super_block *s, struct fs_context *fc)
+{
+	s->s_bdev = fc->sget_key;
+	s->s_dev = s->s_bdev->bd_dev;
+	s->s_bdi = &bdev_get_queue(s->s_bdev)->backing_dev_info;
+	return 0;
+}
+
+static int test_bdev_super_fc(struct super_block *s, struct fs_context *fc)
+{
+	return s->s_bdev == (struct block_device *)fc->sget_key;
+}
+
+int get_tree_bdev(struct fs_context *fc,
+		int (*fill_super)(struct super_block *,
+				  struct fs_context *))
+{
+	struct block_device *bdev;
+	struct super_block *s;
+	fmode_t mode = FMODE_READ | FMODE_EXCL;
+	int error = 0;
+
+	if (!(fc->sb_flags & MS_RDONLY))
+		mode |= FMODE_WRITE;
+
+	if (!fc->source)
+		return invalf(fc, "No source specified");
+
+	bdev = blkdev_get_by_path(fc->source, mode, fc->fs_type);
+	if (IS_ERR(bdev)) {
+		errorf(fc, "%s: Can't open blockdev", fc->source);
+		return PTR_ERR(bdev);
+	}
+
+	/* Once the superblock is inserted into the list by sget_fc(), s_umount
+	 * will protect the lockfs code from trying to start a snapshot while
+	 * we are mounting
+	 */
+	mutex_lock(&bdev->bd_fsfreeze_mutex);
+	if (bdev->bd_fsfreeze_count > 0) {
+		mutex_unlock(&bdev->bd_fsfreeze_mutex);
+		blkdev_put(bdev, mode);
+		warnf(fc, "%pg: Can't mount, blockdev is frozen", bdev);
+		return -EBUSY;
+	}
+
+	fc->sb_flags |= MS_NOSEC;
+	fc->sget_key = bdev;
+	s = sget_fc(fc, test_bdev_super_fc, set_bdev_super_fc);
+	mutex_unlock(&bdev->bd_fsfreeze_mutex);
+	if (IS_ERR(s)) {
+		blkdev_put(bdev, mode);
+		return PTR_ERR(s);
+	}
+
+	if (s->s_root) {
+		/* Don't summarily change the RO/RW state. */
+		if ((fc->sb_flags ^ s->s_flags) & MS_RDONLY) {
+			warnf(fc, "%pg: Can't mount, would change RO state", bdev);
+			deactivate_locked_super(s);
+			blkdev_put(bdev, mode);
+			return -EBUSY;
+		}
+
+		/*
+		 * s_umount nests inside bd_mutex during
+		 * __invalidate_device().  blkdev_put() acquires
+		 * bd_mutex and can't be called under s_umount.  Drop
+		 * s_umount temporarily.  This is safe as we're
+		 * holding an active reference.
+		 */
+		up_write(&s->s_umount);
+		blkdev_put(bdev, mode);
+		down_write(&s->s_umount);
+	} else {
+		s->s_mode = mode;
+		snprintf(s->s_id, sizeof(s->s_id), "%pg", bdev);
+		sb_set_blocksize(s, block_size(bdev));
+		error = fill_super(s, fc);
+		if (error) {
+			deactivate_locked_super(s);
+			return error;
+		}
+
+		s->s_flags |= MS_ACTIVE;
+		bdev->bd_super = s;
+	}
+
+	BUG_ON(fc->root);
+	fc->root = dget(s->s_root);
+	return 0;
+}
+EXPORT_SYMBOL(get_tree_bdev);
+
 void drop_super(struct super_block *sb)
 {
 	up_read(&sb->s_umount);

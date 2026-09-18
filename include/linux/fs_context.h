@@ -18,6 +18,8 @@
 
 struct cred;
 struct dentry;
+struct file;
+struct filename;
 struct file_operations;
 struct file_system_type;
 struct mnt_namespace;
@@ -30,6 +32,34 @@ struct path;
 
 enum fs_context_purpose {
 	FS_CONTEXT_FOR_MOUNT,		/* New superblock for explicit mount */
+};
+
+/*
+ * Type of parameter value.
+ */
+enum fs_value_type {
+	fs_value_is_undefined,
+	fs_value_is_flag,		/* Value not given a value */
+	fs_value_is_string,		/* Value is a string */
+	fs_value_is_blob,		/* Value is a binary blob */
+	fs_value_is_filename,		/* Value is a filename* + dirfd */
+	fs_value_is_file,		/* Value is a file* */
+};
+
+/*
+ * Configuration parameter.
+ */
+struct fs_parameter {
+	const char		*key;		/* Parameter name */
+	enum fs_value_type	type:8;		/* The type of value here */
+	union {
+		char		*string;
+		void		*blob;
+		struct filename	*name;
+		struct file	*file;
+	};
+	size_t	size;
+	int	dirfd;
 };
 
 /*
@@ -55,6 +85,8 @@ struct fs_context {
 						 * security_sb_copy_data() (this tree's LSM
 						 * hooks still consume the raw option string,
 						 * not a parsed struct security_mnt_opts) */
+	void			*sget_key;	/* Passed to super_block::s_fs_info-style
+						 * test/set callbacks (see get_tree_bdev()) */
 	struct vfsmount		*legacy_mnt;	/* vfsmount pre-allocated by vfs_kern_mount()
 						 * so legacy ->mount2()/alloc_mnt_data() users
 						 * (sdcardfs) can see it during mount, matching
@@ -67,6 +99,7 @@ struct fs_context {
 
 struct fs_context_operations {
 	void (*free)(struct fs_context *fc);
+	int (*parse_param)(struct fs_context *fc, struct fs_parameter *param);
 	int (*parse_monolithic)(struct fs_context *fc, void *data);
 	int (*get_tree)(struct fs_context *fc);
 	int (*reconfigure)(struct fs_context *fc);
@@ -80,5 +113,34 @@ extern struct fs_context *fs_context_for_mount(struct file_system_type *fs_type,
 
 extern int vfs_get_tree(struct fs_context *fc);
 extern void put_fs_context(struct fs_context *fc);
+
+extern int vfs_parse_fs_param(struct fs_context *fc, struct fs_parameter *param);
+extern int vfs_parse_fs_string(struct fs_context *fc, const char *key,
+			       const char *value, size_t v_size);
+extern int generic_parse_monolithic(struct fs_context *fc, void *data);
+
+extern struct super_block *sget_fc(struct fs_context *fc,
+				   int (*test)(struct super_block *, struct fs_context *),
+				   int (*set)(struct super_block *, struct fs_context *));
+extern int get_tree_bdev(struct fs_context *fc,
+			 int (*fill_super)(struct super_block *sb,
+					   struct fs_context *fc));
+
+/*
+ * Mount error, warning and informational message logging. Real upstream
+ * routes these through a struct p_log/fc_log ring buffer so they can later
+ * be replayed to userspace via the fsopen() context fd; this tree doesn't
+ * backport the fsopen()/fsconfig() syscalls (mounting still goes through the
+ * legacy mount(2) path only), so these simply log to dmesg directly.
+ */
+#define logfc(fc, fmt, ...) pr_notice(fmt, ## __VA_ARGS__)
+#define infof(fc, fmt, ...) ({ logfc(fc, fmt, ## __VA_ARGS__); })
+#define warnf(fc, fmt, ...) ({ logfc(fc, fmt, ## __VA_ARGS__); })
+#define errorf(fc, fmt, ...) ({ logfc(fc, fmt, ## __VA_ARGS__); })
+#define invalf(fc, fmt, ...) ({ errorf(fc, fmt, ## __VA_ARGS__); -EINVAL; })
+#define infofc(fc, fmt, ...) infof(fc, fmt, ## __VA_ARGS__)
+#define warnfc(fc, fmt, ...) warnf(fc, fmt, ## __VA_ARGS__)
+#define errorfc(fc, fmt, ...) errorf(fc, fmt, ## __VA_ARGS__)
+#define invalfc(fc, fmt, ...) invalf(fc, fmt, ## __VA_ARGS__)
 
 #endif /* _LINUX_FS_CONTEXT_H */
