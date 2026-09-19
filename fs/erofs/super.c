@@ -415,16 +415,16 @@ static int erofs_fc_reconfigure(struct fs_context *fc)
 	struct erofs_sb_info *sbi = EROFS_SB(sb);
 	struct erofs_fs_context *ctx = fc->fs_private;
 
-	DBG_BUGON(!sb_rdonly(sb));
+	DBG_BUGON(!(sb->s_flags & MS_RDONLY));
 
 	if (test_opt(ctx, POSIX_ACL))
-		fc->sb_flags |= SB_POSIXACL;
+		fc->sb_flags |= MS_POSIXACL;
 	else
-		fc->sb_flags &= ~SB_POSIXACL;
+		fc->sb_flags &= ~MS_POSIXACL;
 
 	sbi->ctx = *ctx;
 
-	fc->sb_flags |= SB_RDONLY;
+	fc->sb_flags |= MS_RDONLY;
 	return 0;
 }
 
