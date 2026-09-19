@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <stdlib.h>
 #include <assert.h>
 #include <stdio.h>
@@ -24,21 +25,42 @@ int item_tag_get(struct radix_tree_root *root, unsigned long index, int tag)
 	return radix_tree_tag_get(root, index, tag);
 }
 
-int __item_insert(struct radix_tree_root *root, struct item *item,
-			unsigned order)
+int __item_insert(struct radix_tree_root *root, struct item *item)
 {
-	return __radix_tree_insert(root, item->index, order, item);
+	return __radix_tree_insert(root, item->index, item->order, item);
 }
 
-int item_insert(struct radix_tree_root *root, unsigned long index)
+struct item *item_create(unsigned long index, unsigned int order)
 {
-	return __item_insert(root, item_create(index), 0);
+	struct item *ret = malloc(sizeof(*ret));
+
+	ret->index = index;
+	ret->order = order;
+	return ret;
 }
 
 int item_insert_order(struct radix_tree_root *root, unsigned long index,
 			unsigned order)
 {
-	return __item_insert(root, item_create(index), order);
+	struct item *item = item_create(index, order);
+	int err = __item_insert(root, item);
+	if (err)
+		free(item);
+	return err;
+}
+
+int item_insert(struct radix_tree_root *root, unsigned long index)
+{
+	return item_insert_order(root, index, 0);
+}
+
+void item_sanity(struct item *item, unsigned long index)
+{
+	unsigned long mask;
+	assert(!radix_tree_is_internal_node(item));
+	assert(item->order < BITS_PER_LONG);
+	mask = (1UL << item->order) - 1;
+	assert((item->index | mask) == (index | mask));
 }
 
 int item_delete(struct radix_tree_root *root, unsigned long index)
@@ -46,19 +68,30 @@ int item_delete(struct radix_tree_root *root, unsigned long index)
 	struct item *item = radix_tree_delete(root, index);
 
 	if (item) {
-		assert(item->index == index);
+		item_sanity(item, index);
 		free(item);
 		return 1;
 	}
 	return 0;
 }
 
-struct item *item_create(unsigned long index)
+static void item_free_rcu(struct rcu_head *head)
 {
-	struct item *ret = malloc(sizeof(*ret));
+	struct item *item = container_of(head, struct item, rcu_head);
 
-	ret->index = index;
-	return ret;
+	free(item);
+}
+
+int item_delete_rcu(struct radix_tree_root *root, unsigned long index)
+{
+	struct item *item = radix_tree_delete(root, index);
+
+	if (item) {
+		item_sanity(item, index);
+		call_rcu(&item->rcu_head, item_free_rcu);
+		return 1;
+	}
+	return 0;
 }
 
 void item_check_present(struct radix_tree_root *root, unsigned long index)
@@ -66,8 +99,8 @@ void item_check_present(struct radix_tree_root *root, unsigned long index)
 	struct item *item;
 
 	item = radix_tree_lookup(root, index);
-	assert(item != 0);
-	assert(item->index == index);
+	assert(item != NULL);
+	item_sanity(item, index);
 }
 
 struct item *item_lookup(struct radix_tree_root *root, unsigned long index)
@@ -80,7 +113,7 @@ void item_check_absent(struct radix_tree_root *root, unsigned long index)
 	struct item *item;
 
 	item = radix_tree_lookup(root, index);
-	assert(item == 0);
+	assert(item == NULL);
 }
 
 /*
@@ -256,8 +289,15 @@ void verify_tag_consistency(struct radix_tree_root *root, unsigned int tag)
 
 void item_kill_tree(struct radix_tree_root *root)
 {
+	struct radix_tree_iter iter;
+	void **slot;
 	struct item *items[32];
 	int nfound;
+
+	radix_tree_for_each_slot(slot, root, &iter, 0) {
+		if (xa_is_value(*slot))
+			radix_tree_delete(root, iter.index);
+	}
 
 	while ((nfound = radix_tree_gang_lookup(root, (void **)items, 0, 32))) {
 		int i;

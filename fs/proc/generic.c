@@ -179,7 +179,6 @@ static int xlate_proc_name(const char *name, struct proc_dir_entry **ret,
 }
 
 static DEFINE_IDA(proc_inum_ida);
-static DEFINE_SPINLOCK(proc_inum_lock); /* protects the above */
 
 #define PROC_DYNAMIC_FIRST 0xF0000000U
 

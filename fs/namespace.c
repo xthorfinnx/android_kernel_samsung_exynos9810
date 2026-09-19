@@ -80,12 +80,9 @@ __setup("mphash_entries=", set_mphash_entries);
 static u64 event;
 static DEFINE_IDA(mnt_id_ida);
 static DEFINE_IDA(mnt_group_ida);
-static DEFINE_SPINLOCK(mnt_id_lock);
 #ifdef CONFIG_RKP_NS_PROT
 static DEFINE_SPINLOCK(mnt_vfsmnt_lock);
 #endif /*CONFIG_RKP_NS_PROT */
-static int mnt_id_start = 0;
-static int mnt_group_start = 1;
 
 static struct hlist_head *mount_hashtable __read_mostly;
 static struct hlist_head *mountpoint_hashtable __read_mostly;

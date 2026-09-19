@@ -261,7 +261,7 @@ void truncate_inode_pages_range(struct address_space *mapping,
 			if (index >= end)
 				break;
 
-			if (radix_tree_exceptional_entry(page)) {
+			if (xa_is_value(page)) {
 				clear_exceptional_entry(mapping, index, page);
 				continue;
 			}
@@ -350,7 +350,7 @@ void truncate_inode_pages_range(struct address_space *mapping,
 				break;
 			}
 
-			if (radix_tree_exceptional_entry(page)) {
+			if (xa_is_value(page)) {
 				clear_exceptional_entry(mapping, index, page);
 				continue;
 			}
@@ -473,7 +473,7 @@ unsigned long invalidate_mapping_pages(struct address_space *mapping,
 			if (index > end)
 				break;
 
-			if (radix_tree_exceptional_entry(page)) {
+			if (xa_is_value(page)) {
 				clear_exceptional_entry(mapping, index, page);
 				continue;
 			}
@@ -595,7 +595,7 @@ int invalidate_inode_pages2_range(struct address_space *mapping,
 			if (index > end)
 				break;
 
-			if (radix_tree_exceptional_entry(page)) {
+			if (xa_is_value(page)) {
 				clear_exceptional_entry(mapping, index, page);
 				continue;
 			}
