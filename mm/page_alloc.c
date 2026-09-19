@@ -4162,7 +4162,7 @@ no_zone:
 	 * Runtime PM, block IO and its error handling path can deadlock
 	 * because I/O on the device might not complete.
 	 */
-	alloc_mask = memalloc_noio_flags(gfp_mask);
+	alloc_mask = current_gfp_context(gfp_mask);
 	ac.spread_dirty_pages = false;
 
 	/*
