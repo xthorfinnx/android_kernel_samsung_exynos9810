@@ -366,9 +366,9 @@ static void inode_switch_wbs_work_fn(struct work_struct *work)
 	 * By the time control reaches here, RCU grace period has passed
 	 * since I_WB_SWITCH assertion and all wb stat update transactions
 	 * between unlocked_inode_to_wb_begin/end() are guaranteed to be
-	 * synchronizing against mapping->tree_lock.
+	 * synchronizing against mapping->i_pages.xa_lock.
 	 *
-	 * Grabbing old_wb->list_lock, inode->i_lock and mapping->tree_lock
+	 * Grabbing old_wb->list_lock, inode->i_lock and mapping->i_pages.xa_lock
 	 * gives us exclusion against all wb related operations on @inode
 	 * including IO list manipulations and stat updates.
 	 */
@@ -380,7 +380,7 @@ static void inode_switch_wbs_work_fn(struct work_struct *work)
 		spin_lock_nested(&old_wb->list_lock, SINGLE_DEPTH_NESTING);
 	}
 	spin_lock(&inode->i_lock);
-	spin_lock_irq(&mapping->tree_lock);
+	xa_lock_irq(&mapping->i_pages);
 
 	/*
 	 * Once I_FREEING is visible under i_lock, the eviction path owns
@@ -394,20 +394,20 @@ static void inode_switch_wbs_work_fn(struct work_struct *work)
 	 * to possibly dirty pages while PAGECACHE_TAG_WRITEBACK points to
 	 * pages actually under underwriteback.
 	 */
-	radix_tree_for_each_tagged(slot, &mapping->page_tree, &iter, 0,
+	radix_tree_for_each_tagged(slot, &mapping->i_pages, &iter, 0,
 				   PAGECACHE_TAG_DIRTY) {
 		struct page *page = radix_tree_deref_slot_protected(slot,
-							&mapping->tree_lock);
+							&mapping->i_pages.xa_lock);
 		if (likely(page) && PageDirty(page)) {
 			__dec_wb_stat(old_wb, WB_RECLAIMABLE);
 			__inc_wb_stat(new_wb, WB_RECLAIMABLE);
 		}
 	}
 
-	radix_tree_for_each_tagged(slot, &mapping->page_tree, &iter, 0,
+	radix_tree_for_each_tagged(slot, &mapping->i_pages, &iter, 0,
 				   PAGECACHE_TAG_WRITEBACK) {
 		struct page *page = radix_tree_deref_slot_protected(slot,
-							&mapping->tree_lock);
+							&mapping->i_pages.xa_lock);
 		if (likely(page)) {
 			WARN_ON_ONCE(!PageWriteback(page));
 			__dec_wb_stat(old_wb, WB_WRITEBACK);
@@ -449,7 +449,7 @@ skip_switch:
 	 */
 	smp_store_release(&inode->i_state, inode->i_state & ~I_WB_SWITCH);
 
-	spin_unlock_irq(&mapping->tree_lock);
+	xa_unlock_irq(&mapping->i_pages);
 	spin_unlock(&inode->i_lock);
 	spin_unlock(&new_wb->list_lock);
 	spin_unlock(&old_wb->list_lock);

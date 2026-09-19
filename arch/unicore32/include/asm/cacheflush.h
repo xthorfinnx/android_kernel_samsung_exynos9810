@@ -180,9 +180,9 @@ extern void flush_cache_page(struct vm_area_struct *vma,
 extern void flush_dcache_page(struct page *);
 
 #define flush_dcache_mmap_lock(mapping)			\
-	spin_lock_irq(&(mapping)->tree_lock)
+	xa_lock_irq(&(mapping)->i_pages)
 #define flush_dcache_mmap_unlock(mapping)		\
-	spin_unlock_irq(&(mapping)->tree_lock)
+	xa_unlock_irq(&(mapping)->i_pages)
 
 #define flush_icache_user_range(vma, page, addr, len)	\
 	flush_dcache_page(page)

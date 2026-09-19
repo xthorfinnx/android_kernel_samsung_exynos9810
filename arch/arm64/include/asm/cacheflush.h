@@ -133,9 +133,9 @@ static inline void __flush_icache_all(void)
 }
 
 #define flush_dcache_mmap_lock(mapping) \
-	spin_lock_irq(&(mapping)->tree_lock)
+	xa_lock_irq(&(mapping)->i_pages)
 #define flush_dcache_mmap_unlock(mapping) \
-	spin_unlock_irq(&(mapping)->tree_lock)
+	xa_unlock_irq(&(mapping)->i_pages)
 
 /*
  * We don't appear to need to do anything here.  In fact, if we did, we'd

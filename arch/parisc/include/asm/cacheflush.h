@@ -57,9 +57,9 @@ void invalidate_kernel_vmap_range(void *vaddr, int size);
 extern void flush_dcache_page(struct page *page);
 
 #define flush_dcache_mmap_lock(mapping) \
-	spin_lock_irq(&(mapping)->tree_lock)
+	xa_lock_irq(&(mapping)->i_pages)
 #define flush_dcache_mmap_unlock(mapping) \
-	spin_unlock_irq(&(mapping)->tree_lock)
+	xa_unlock_irq(&(mapping)->i_pages)
 
 #define flush_icache_page(vma,page)	do { 		\
 	flush_kernel_dcache_page(page);			\

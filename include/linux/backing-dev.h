@@ -350,7 +350,7 @@ static inline bool inode_to_wb_is_valid(struct inode *inode)
  * @inode: inode of interest
  *
  * Returns the wb @inode is currently associated with.  The caller must be
- * holding either @inode->i_lock, @inode->i_mapping->tree_lock, or the
+ * holding either @inode->i_lock, @inode->i_mapping->i_pages.xa_lock, or the
  * associated wb's list_lock.
  */
 static inline struct bdi_writeback *inode_to_wb(struct inode *inode)
@@ -358,7 +358,7 @@ static inline struct bdi_writeback *inode_to_wb(struct inode *inode)
 #ifdef CONFIG_LOCKDEP
 	WARN_ON_ONCE(debug_locks &&
 		     (!lockdep_is_held(&inode->i_lock) &&
-		      !lockdep_is_held(&inode->i_mapping->tree_lock) &&
+		      !lockdep_is_held(&inode->i_mapping->i_pages.xa_lock) &&
 		      !lockdep_is_held(&inode->i_wb->list_lock)));
 #endif
 	return inode->i_wb;
@@ -370,7 +370,7 @@ static inline struct bdi_writeback *inode_to_wb(struct inode *inode)
  * @cookie: output param, to be passed to the end function
  *
  * The caller wants to access the wb associated with @inode but isn't
- * holding inode->i_lock, mapping->tree_lock or wb->list_lock.  This
+ * holding inode->i_lock, mapping->i_pages.xa_lock or wb->list_lock.  This
  * function determines the wb associated with @inode and ensures that the
  * association doesn't change until the transaction is finished with
  * unlocked_inode_to_wb_end().
@@ -391,7 +391,7 @@ unlocked_inode_to_wb_begin(struct inode *inode, struct wb_lock_cookie *cookie)
 	cookie->locked = smp_load_acquire(&inode->i_state) & I_WB_SWITCH;
 
 	if (unlikely(cookie->locked))
-		spin_lock_irqsave(&inode->i_mapping->tree_lock, cookie->flags);
+		xa_lock_irqsave(&inode->i_mapping->i_pages, cookie->flags);
 
 	/*
 	 * Protected by either !I_WB_SWITCH + rcu_read_lock() or tree_lock.
@@ -409,7 +409,7 @@ static inline void unlocked_inode_to_wb_end(struct inode *inode,
 					    struct wb_lock_cookie *cookie)
 {
 	if (unlikely(cookie->locked))
-		spin_unlock_irqrestore(&inode->i_mapping->tree_lock, cookie->flags);
+		xa_unlock_irqrestore(&inode->i_mapping->i_pages, cookie->flags);
 
 	rcu_read_unlock();
 }

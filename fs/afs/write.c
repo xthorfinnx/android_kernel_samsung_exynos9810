@@ -491,7 +491,7 @@ static int afs_writepages_region(struct address_space *mapping,
 			return 0;
 		}
 
-		/* at this point we hold neither mapping->tree_lock nor lock on
+		/* at this point we hold neither mapping->i_pages.xa_lock nor lock on
 		 * the page itself: the page may be truncated or invalidated
 		 * (changing page->mapping to NULL), or even swizzled back from
 		 * swapper_space to tmpfs file mapping

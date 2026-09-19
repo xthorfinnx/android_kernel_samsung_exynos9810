@@ -35,7 +35,7 @@ static const struct address_space_operations swap_aops = {
 
 struct address_space swapper_spaces[MAX_SWAPFILES] = {
 	[0 ... MAX_SWAPFILES - 1] = {
-		.page_tree	= RADIX_TREE_INIT(swapper_space, GFP_ATOMIC|__GFP_NOWARN),
+		.i_pages	= RADIX_TREE_INIT(swapper_space, GFP_ATOMIC|__GFP_NOWARN),
 		.i_mmap_writable = ATOMIC_INIT(0),
 		.a_ops		= &swap_aops,
 		/* swap cache doesn't use writeback related tags */
@@ -93,15 +93,15 @@ int __add_to_swap_cache(struct page *page, swp_entry_t entry)
 	set_page_private(page, entry.val);
 
 	address_space = swap_address_space(entry);
-	spin_lock_irq(&address_space->tree_lock);
-	error = radix_tree_insert(&address_space->page_tree,
+	xa_lock_irq(&address_space->i_pages);
+	error = radix_tree_insert(&address_space->i_pages,
 				  swp_offset(entry), page);
 	if (likely(!error)) {
 		address_space->nrpages++;
 		__inc_node_page_state(page, NR_FILE_PAGES);
 		INC_CACHE_INFO(add_total);
 	}
-	spin_unlock_irq(&address_space->tree_lock);
+	xa_unlock_irq(&address_space->i_pages);
 
 	if (unlikely(error)) {
 		/*
@@ -146,7 +146,7 @@ void __delete_from_swap_cache(struct page *page)
 
 	entry.val = page_private(page);
 	address_space = swap_address_space(entry);
-	radix_tree_delete(&address_space->page_tree, swp_offset(entry));
+	radix_tree_delete(&address_space->i_pages, swp_offset(entry));
 	set_page_private(page, 0);
 	ClearPageSwapCache(page);
 	address_space->nrpages--;
@@ -224,9 +224,9 @@ void delete_from_swap_cache(struct page *page)
 	entry.val = page_private(page);
 
 	address_space = swap_address_space(entry);
-	spin_lock_irq(&address_space->tree_lock);
+	xa_lock_irq(&address_space->i_pages);
 	__delete_from_swap_cache(page);
-	spin_unlock_irq(&address_space->tree_lock);
+	xa_unlock_irq(&address_space->i_pages);
 
 	swapcache_free(entry);
 	put_page(page);

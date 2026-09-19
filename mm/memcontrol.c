@@ -6151,7 +6151,7 @@ void mem_cgroup_swapout(struct page *page, swp_entry_t entry)
 
 	/*
 	 * Interrupts should be disabled here because the caller holds the
-	 * mapping->tree_lock lock which is taken with interrupts-off. It is
+	 * mapping->i_pages.xa_lock lock which is taken with interrupts-off. It is
 	 * important here to have the interrupts disabled because it is the
 	 * only synchronisation we have for udpating the per-CPU variables.
 	 */
