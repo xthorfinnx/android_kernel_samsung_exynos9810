@@ -33,7 +33,7 @@ struct idr {
 					(1 << (ROOT_TAG_SHIFT + IDR_FREE)))
 
 #define IDR_INIT_BASE(base) {						\
-	.idr_rt = RADIX_TREE_INIT(IDR_RT_MARKER),			\
+	.idr_rt = RADIX_TREE_INIT(idr_rt, IDR_RT_MARKER),			\
 	.idr_base = (base),						\
 	.idr_next = 0,							\
 }
@@ -217,7 +217,7 @@ struct ida {
 };
 
 #define IDA_INIT	{						\
-	.ida_rt = RADIX_TREE_INIT(IDR_RT_MARKER | GFP_NOWAIT),		\
+	.ida_rt = RADIX_TREE_INIT(ida_rt, IDR_RT_MARKER | GFP_NOWAIT),		\
 }
 #define DEFINE_IDA(name)	struct ida name = IDA_INIT
 
