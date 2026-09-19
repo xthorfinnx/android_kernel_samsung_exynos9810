@@ -7,6 +7,7 @@
 #define __EROFS_INTERNAL_H
 
 #include <linux/fs.h>
+#include <linux/overflow.h>
 #include <linux/dcache.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
