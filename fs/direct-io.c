@@ -37,6 +37,7 @@
 #include <linux/rwsem.h>
 #include <linux/uio.h>
 #include <linux/atomic.h>
+#include <linux/ratelimit.h>
 #include <linux/prefetch.h>
 
 #include <crypto/fmp.h>
@@ -302,6 +303,30 @@ static blk_status_t dio_bio_complete(struct dio *dio, struct bio *bio);
 /*
  * Asynchronous IO callback. 
  */
+/*
+ * Backported from upstream (fs: warn about stale page cache on direct I/O
+ * invalidation failure) for iomap dio. This tree has no errseq_t, so the
+ * writeback error is recorded with mapping_set_error().
+ */
+void dio_warn_stale_pagecache(struct file *filp)
+{
+	static DEFINE_RATELIMIT_STATE(_rs, 86400 * HZ, DEFAULT_RATELIMIT_BURST);
+	char pathname[128];
+	struct inode *inode = file_inode(filp);
+	char *path;
+
+	mapping_set_error(inode->i_mapping, -EIO);
+	if (__ratelimit(&_rs)) {
+		path = file_path(filp, pathname, sizeof(pathname));
+		if (IS_ERR(path))
+			path = "(unknown)";
+		pr_crit("Page cache invalidation failure on direct I/O.  Possible data corruption due to collision with buffered I/O!\n");
+		pr_crit("File: %s PID: %d Comm: %.20s\n", path, current->pid,
+			current->comm);
+	}
+}
+EXPORT_SYMBOL_GPL(dio_warn_stale_pagecache);
+
 static void dio_bio_end_aio(struct bio *bio)
 {
 	struct dio *dio = bio->bi_private;
@@ -570,7 +595,7 @@ static inline int dio_bio_reap(struct dio *dio, struct dio_submit *sdio)
  * filesystems that don't need it and also allows us to create the workqueue
  * late enough so the we can include s_id in the name of the workqueue.
  */
-static int sb_init_dio_done_wq(struct super_block *sb)
+int sb_init_dio_done_wq(struct super_block *sb)
 {
 	struct workqueue_struct *old;
 	struct workqueue_struct *wq = alloc_workqueue("dio/%s",

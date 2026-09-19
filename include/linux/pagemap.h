@@ -437,6 +437,44 @@ static inline struct page *read_mapping_page(struct address_space *mapping,
  * Get index of the page within radix-tree (but not for hugetlb pages).
  * (TODO: remove once hugetlb pages will have ->index in PAGE_SIZE)
  */
+/**
+ * page_mkwrite_check_truncate - check if page was truncated
+ * @page: the page to check
+ * @inode: the inode to check the page against
+ *
+ * Returns the number of bytes in the page up to EOF,
+ * or -EFAULT if the page was truncated.
+ * (Backported from upstream for the iomap import.)
+ */
+static inline int page_mkwrite_check_truncate(struct page *page,
+					      struct inode *inode)
+{
+	loff_t size = i_size_read(inode);
+	pgoff_t index = size >> PAGE_SHIFT;
+	int offset = offset_in_page(size);
+
+	if (page->mapping != inode->i_mapping)
+		return -EFAULT;
+
+	/* page is wholly inside EOF */
+	if (page->index < index)
+		return PAGE_SIZE;
+	/* page is wholly past EOF */
+	if (page->index > index || !offset)
+		return -EFAULT;
+	/* page is partially inside EOF */
+	return offset;
+}
+
+/*
+ * i_blocks_per_page - how many blocks fit in a page (upstream helper).
+ */
+static inline unsigned int i_blocks_per_page(struct inode *inode,
+					     struct page *page)
+{
+	return (PAGE_SIZE << compound_order(page)) >> inode->i_blkbits;
+}
+
 static inline pgoff_t page_to_index(struct page *page)
 {
 	pgoff_t pgoff;

@@ -6,6 +6,7 @@
 #include <linux/radix-tree.h>
 #include <asm/pgtable.h>
 
+struct iomap;
 struct iomap_ops;
 
 /* We use lowest available exceptional entry bit for locking */
@@ -47,6 +48,17 @@ static inline int __dax_zero_page_range(struct block_device *bdev,
 	return -ENXIO;
 }
 #endif
+
+/*
+ * Used by the iomap zeroing path (fs/iomap/buffered-io.c) for IS_DAX inodes.
+ * DAX is not enabled in this tree's configs and the upstream DAX core is not
+ * backported, so this is only a stub.
+ */
+static inline int dax_iomap_zero(loff_t pos, unsigned offset, unsigned size,
+				 struct iomap *iomap)
+{
+	return -ENXIO;
+}
 
 #if defined(CONFIG_TRANSPARENT_HUGEPAGE)
 int dax_pmd_fault(struct vm_area_struct *, unsigned long addr, pmd_t *,

@@ -632,8 +632,8 @@ EXPORT_SYMBOL(mark_buffer_dirty_inode_sync);
  *
  * The caller must hold lock_page_memcg().
  */
-static void __set_page_dirty(struct page *page, struct address_space *mapping,
-			     int warn)
+void __set_page_dirty(struct page *page, struct address_space *mapping,
+		      int warn)
 {
 	unsigned long flags;
 
@@ -1975,18 +1975,19 @@ iomap_to_bh(struct inode *inode, sector_t block, struct buffer_head *bh,
 		break;
 	case IOMAP_UNWRITTEN:
 		/*
-		 * For unwritten regions, we always need to ensure that
-		 * sub-block writes cause the regions in the block we are not
-		 * writing to are zeroed. Set the buffer as new to ensure this.
+		 * For unwritten regions, we always need to ensure that regions
+		 * in the block we are not writing to are zeroed. Mark the
+		 * buffer as new to ensure this.
 		 */
 		set_buffer_new(bh);
 		set_buffer_unwritten(bh);
 		/* FALLTHRU */
 	case IOMAP_MAPPED:
-		if (offset >= i_size_read(inode))
+		if ((iomap->flags & IOMAP_F_NEW) ||
+		    offset >= i_size_read(inode))
 			set_buffer_new(bh);
-		bh->b_blocknr = (iomap->blkno >> (inode->i_blkbits - 9)) +
-				((offset - iomap->offset) >> inode->i_blkbits);
+		bh->b_blocknr = (iomap->addr + offset - iomap->offset) >>
+				inode->i_blkbits;
 		set_buffer_mapped(bh);
 		break;
 	}

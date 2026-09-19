@@ -437,6 +437,8 @@ __bread(struct block_device *bdev, sector_t block, unsigned size)
 }
 
 extern int __set_page_dirty_buffers(struct page *page);
+extern void __set_page_dirty(struct page *page, struct address_space *mapping,
+			     int warn);
 
 #else /* CONFIG_BLOCK */
 

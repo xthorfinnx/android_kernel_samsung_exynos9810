@@ -420,6 +420,41 @@ extern void bio_reset(struct bio *);
 void bio_chain(struct bio *, struct bio *);
 
 extern int bio_add_page(struct bio *, struct page *, unsigned int,unsigned int);
+extern void __bio_add_page(struct bio *bio, struct page *page,
+		unsigned int len, unsigned int off);
+extern bool __bio_try_merge_page(struct bio *bio, struct page *page,
+		unsigned int len, unsigned int off, bool *same_page);
+
+/**
+ * bio_full - check if the bio is full
+ * @bio:	bio to check
+ * @len:	length of one segment to be added
+ *
+ * Return true if @bio is full and one segment with @len bytes can't be
+ * added to the bio, otherwise return false. (Backported from upstream for
+ * the iomap import.)
+ */
+static inline bool bio_full(struct bio *bio, unsigned len)
+{
+	if (bio->bi_vcnt >= bio->bi_max_vecs)
+		return true;
+
+	if (bio->bi_iter.bi_size > UINT_MAX - len)
+		return true;
+
+	return false;
+}
+
+#define BIO_MAX_VECS		BIO_MAX_PAGES
+
+/**
+ * bio_max_segs - clamp a segment count to what a single bio can hold
+ * @nr_segs:	number of segments wanted
+ */
+static inline unsigned int bio_max_segs(unsigned int nr_segs)
+{
+	return min(nr_segs, (unsigned int)BIO_MAX_VECS);
+}
 extern int bio_add_pc_page(struct request_queue *, struct bio *, struct page *,
 			   unsigned int, unsigned int);
 int bio_iov_iter_get_pages(struct bio *bio, struct iov_iter *iter);
