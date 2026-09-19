@@ -637,7 +637,8 @@ do_readahead(struct address_space *mapping, struct file *filp,
 	if (dax_mapping(mapping))
 		return 0;
 
-	return force_page_cache_readahead(mapping, filp, index, nr);
+	force_page_cache_readahead(mapping, filp, index, nr);
+	return 0;
 }
 
 SYSCALL_DEFINE3(readahead, int, fd, loff_t, offset, size_t, count)
