@@ -253,19 +253,12 @@ static inline struct hlist_head *mp_hash(struct dentry *dentry)
  */
 static int mnt_alloc_id(struct mount *mnt)
 {
-	int res;
+	int res = ida_alloc(&mnt_id_ida, GFP_KERNEL);
 
-retry:
-	ida_pre_get(&mnt_id_ida, GFP_KERNEL);
-	spin_lock(&mnt_id_lock);
-	res = ida_get_new_above(&mnt_id_ida, mnt_id_start, &mnt->mnt_id);
-	if (!res)
-		mnt_id_start = mnt->mnt_id + 1;
-	spin_unlock(&mnt_id_lock);
-	if (res == -EAGAIN)
-		goto retry;
-
-	return res;
+	if (res < 0)
+		return res;
+	mnt->mnt_id = res;
+	return 0;
 }
 #ifdef CONFIG_RKP_NS_PROT
 void rkp_init_ns(struct vfsmount *vfsmnt,struct mount *mnt)
@@ -290,12 +283,7 @@ static int mnt_alloc_vfsmount(struct mount *mnt)
 #endif
 static void mnt_free_id(struct mount *mnt)
 {
-	int id = mnt->mnt_id;
-	spin_lock(&mnt_id_lock);
-	ida_remove(&mnt_id_ida, id);
-	if (mnt_id_start > id)
-		mnt_id_start = id;
-	spin_unlock(&mnt_id_lock);
+	ida_free(&mnt_id_ida, mnt->mnt_id);
 }
 
 /*
@@ -305,18 +293,12 @@ static void mnt_free_id(struct mount *mnt)
  */
 static int mnt_alloc_group_id(struct mount *mnt)
 {
-	int res;
+	int res = ida_alloc_min(&mnt_group_ida, 1, GFP_KERNEL);
 
-	if (!ida_pre_get(&mnt_group_ida, GFP_KERNEL))
-		return -ENOMEM;
-
-	res = ida_get_new_above(&mnt_group_ida,
-				mnt_group_start,
-				&mnt->mnt_group_id);
-	if (!res)
-		mnt_group_start = mnt->mnt_group_id + 1;
-
-	return res;
+	if (res < 0)
+		return res;
+	mnt->mnt_group_id = res;
+	return 0;
 }
 
 /*
@@ -324,10 +306,7 @@ static int mnt_alloc_group_id(struct mount *mnt)
  */
 void mnt_release_group_id(struct mount *mnt)
 {
-	int id = mnt->mnt_group_id;
-	ida_remove(&mnt_group_ida, id);
-	if (mnt_group_start > id)
-		mnt_group_start = id;
+	ida_free(&mnt_group_ida, mnt->mnt_group_id);
 	mnt->mnt_group_id = 0;
 }
 

@@ -476,10 +476,6 @@ int devpts_new_index(struct pts_fs_info *fsi)
 	int index;
 	int ida_ret;
 
-retry:
-	if (!ida_pre_get(&fsi->allocated_ptys, GFP_KERNEL))
-		return -ENOMEM;
-
 	mutex_lock(&allocated_ptys_lock);
 	if (pty_count >= (pty_limit -
 			  (fsi->mount_opts.reserve ? 0 : pty_reserve))) {
@@ -487,19 +483,15 @@ retry:
 		return -ENOSPC;
 	}
 
-	ida_ret = ida_get_new(&fsi->allocated_ptys, &index);
+	ida_ret = ida_alloc_max(&fsi->allocated_ptys, fsi->mount_opts.max - 1,
+			GFP_KERNEL);
 	if (ida_ret < 0) {
 		mutex_unlock(&allocated_ptys_lock);
-		if (ida_ret == -EAGAIN)
-			goto retry;
+		if (ida_ret == -ENOSPC)
+			return -ENOSPC;
 		return -EIO;
 	}
-
-	if (index >= fsi->mount_opts.max) {
-		ida_remove(&fsi->allocated_ptys, index);
-		mutex_unlock(&allocated_ptys_lock);
-		return -ENOSPC;
-	}
+	index = ida_ret;
 	pty_count++;
 	mutex_unlock(&allocated_ptys_lock);
 	return index;
@@ -508,7 +500,7 @@ retry:
 void devpts_kill_index(struct pts_fs_info *fsi, int idx)
 {
 	mutex_lock(&allocated_ptys_lock);
-	ida_remove(&fsi->allocated_ptys, idx);
+	ida_free(&fsi->allocated_ptys, idx);
 	pty_count--;
 	mutex_unlock(&allocated_ptys_lock);
 }
