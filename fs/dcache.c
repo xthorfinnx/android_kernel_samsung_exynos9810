@@ -1592,6 +1592,9 @@ EXPORT_SYMBOL(d_invalidate);
  * copied and the copy passed in may be reused after this call.
  */
  
+const struct qstr dotdot_name = QSTR_INIT("..", 2);
+EXPORT_SYMBOL(dotdot_name);
+
 struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 {
 	struct dentry *dentry;

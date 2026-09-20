@@ -229,6 +229,7 @@ extern void d_delete(struct dentry *);
 extern void d_set_d_op(struct dentry *dentry, const struct dentry_operations *op);
 
 /* allocate/de-allocate */
+extern const struct qstr dotdot_name;
 extern struct dentry * d_alloc(struct dentry *, const struct qstr *);
 extern struct dentry * d_alloc_pseudo(struct super_block *, const struct qstr *);
 extern struct dentry * d_alloc_parallel(struct dentry *, const struct qstr *,
