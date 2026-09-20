@@ -1048,4 +1048,11 @@ static inline void folio_end_read(struct folio *folio, bool success)
 	folio_unlock(folio);
 }
 
+/* single-page folios only: this tree's page cache has no large folios */
+static inline void folio_zero_segment(struct folio *folio, size_t start,
+				      size_t xend)
+{
+	zero_user_segments(&folio->page, start, xend, 0, 0);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
