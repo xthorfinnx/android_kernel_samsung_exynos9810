@@ -349,7 +349,7 @@ static int z_erofs_transform_plain(struct z_erofs_decompress_req *rq,
 	}
 
 	for (; rq->outputsize; rq->pageofs_in = 0, cur += PAGE_SIZE, ni++) {
-		insz = min(PAGE_SIZE - rq->pageofs_in, rq->outputsize);
+		insz = min_t(unsigned int, PAGE_SIZE - rq->pageofs_in, rq->outputsize);
 		rq->outputsize -= insz;
 		if (!rq->in[ni])
 			continue;
@@ -359,7 +359,7 @@ static int z_erofs_transform_plain(struct z_erofs_decompress_req *rq,
 			no = (rq->pageofs_out + cur + pi) >> PAGE_SHIFT;
 			po = (rq->pageofs_out + cur + pi) & ~PAGE_MASK;
 			DBG_BUGON(no >= nrpages_out);
-			cnt = min(insz - pi, PAGE_SIZE - po);
+			cnt = min_t(unsigned int, insz - pi, PAGE_SIZE - po);
 			if (rq->out[no] == rq->in[ni]) {
 				memmove(kin + po,
 					kin + rq->pageofs_in + pi, cnt);
