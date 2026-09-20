@@ -152,6 +152,30 @@ do {                                                            \
 } while (0)
 
 
+#ifdef CONFIG_HIGHMEM
+#error kmap_local_*() for CONFIG_HIGHMEM is not backported to this tree
+#else
+/* !CONFIG_HIGHMEM variants, as in upstream include/linux/highmem-internal.h */
+static inline void *kmap_local_page(struct page *page)
+{
+	return page_address(page);
+}
+
+static inline void __kunmap_local(void *addr)
+{
+#ifdef ARCH_HAS_FLUSH_ON_KUNMAP
+	kunmap_flush_on_unmap(addr);
+#endif
+}
+
+#define kunmap_local(__addr)					\
+do {								\
+	BUILD_BUG_ON(__same_type((__addr), struct page *));	\
+	__kunmap_local(__addr);					\
+} while (0)
+#endif
+
+
 /* when CONFIG_HIGHMEM is not set these will be plain clear/copy_page */
 #ifndef clear_user_highpage
 static inline void clear_user_highpage(struct page *page, unsigned long vaddr)
