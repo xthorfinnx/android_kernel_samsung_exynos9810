@@ -1770,7 +1770,13 @@ static void z_erofs_readahead(struct readahead_control *rac)
 	erofs_release_pages(&pagepool);
 }
 
+/* this tree's VFS still calls the page-based ->readpage hook */
+static int z_erofs_readpage(struct file *file, struct page *page)
+{
+	return z_erofs_read_folio(file, page_folio(page));
+}
+
 const struct address_space_operations z_erofs_aops = {
-	.read_folio = z_erofs_read_folio,
+	.readpage = z_erofs_readpage,
 	.readahead = z_erofs_readahead,
 };
