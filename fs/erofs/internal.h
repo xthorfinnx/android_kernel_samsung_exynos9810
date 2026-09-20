@@ -9,6 +9,7 @@
 
 #include <linux/fs.h>
 #include <linux/overflow.h>
+#include <linux/refcount.h>
 #include <linux/uio.h>
 #include <linux/kobject.h>
 #include <linux/completion.h>
