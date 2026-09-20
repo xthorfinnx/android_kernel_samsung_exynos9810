@@ -389,7 +389,7 @@ int z_erofs_stream_switch_bufs(struct z_erofs_stream_dctx *dctx, void **dst,
 
 		if (dctx->kout)
 			kunmap_local(dctx->kout);
-		dctx->avail_out = min(rq->outputsize, PAGE_SIZE - rq->pageofs_out);
+		dctx->avail_out = min_t(unsigned int, rq->outputsize, PAGE_SIZE - rq->pageofs_out);
 		rq->outputsize -= dctx->avail_out;
 		pgo = &rq->out[dctx->no];
 		if (!*pgo && rq->fillgaps) {		/* deduped */
