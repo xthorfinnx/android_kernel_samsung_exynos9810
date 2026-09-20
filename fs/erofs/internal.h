@@ -8,6 +8,8 @@
 
 #include <linux/fs.h>
 #include <linux/overflow.h>
+#include <linux/kobject.h>
+#include <linux/completion.h>
 #include <linux/dcache.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
