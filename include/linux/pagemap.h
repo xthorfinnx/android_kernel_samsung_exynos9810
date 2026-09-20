@@ -877,4 +877,151 @@ static inline unsigned long dir_pages(struct inode *inode)
 			       PAGE_SHIFT;
 }
 
+/*
+ * Folio API, layered over struct page (order-0/THP page cache only).
+ * Names and semantics follow upstream v5.16+.
+ */
+static inline struct folio *page_folio(struct page *page)
+{
+	return (struct folio *)compound_head(page);
+}
+
+static inline struct page *folio_page(struct folio *folio, unsigned long n)
+{
+	return &folio->page + n;
+}
+
+static inline struct folio *page_folio_const(const struct page *page)
+{
+	return page_folio((struct page *)page);
+}
+
+static inline unsigned int folio_order(struct folio *folio)
+{
+	return compound_order(&folio->page);
+}
+
+static inline long folio_nr_pages(struct folio *folio)
+{
+	return 1L << folio_order(folio);
+}
+
+static inline size_t folio_size(struct folio *folio)
+{
+	return PAGE_SIZE << folio_order(folio);
+}
+
+static inline void folio_get(struct folio *folio)
+{
+	get_page(&folio->page);
+}
+
+static inline void folio_put(struct folio *folio)
+{
+	put_page(&folio->page);
+}
+
+static inline pgoff_t folio_index(struct folio *folio)
+{
+	return page_index(&folio->page);
+}
+
+static inline pgoff_t folio_next_index(struct folio *folio)
+{
+	return folio_index(folio) + folio_nr_pages(folio);
+}
+
+static inline struct page *folio_file_page(struct folio *folio, pgoff_t index)
+{
+	return folio_page(folio, index & (folio_nr_pages(folio) - 1));
+}
+
+static inline bool folio_contains(struct folio *folio, pgoff_t index)
+{
+	return index - folio_index(folio) < folio_nr_pages(folio);
+}
+
+static inline loff_t folio_pos(struct folio *folio)
+{
+	return page_offset(&folio->page);
+}
+
+static inline struct address_space *folio_mapping(struct folio *folio)
+{
+	return page_mapping(&folio->page);
+}
+
+static inline bool folio_test_private(struct folio *folio)
+{
+	return PagePrivate(&folio->page);
+}
+
+static inline bool folio_test_locked(struct folio *folio)
+{
+	return PageLocked(&folio->page);
+}
+
+static inline bool folio_test_uptodate(struct folio *folio)
+{
+	return PageUptodate(&folio->page);
+}
+
+static inline void folio_mark_uptodate(struct folio *folio)
+{
+	SetPageUptodate(&folio->page);
+}
+
+static inline void folio_lock(struct folio *folio)
+{
+	lock_page(&folio->page);
+}
+
+static inline void folio_unlock(struct folio *folio)
+{
+	unlock_page(&folio->page);
+}
+
+static inline void folio_wait_locked(struct folio *folio)
+{
+	wait_on_page_locked(&folio->page);
+}
+
+static inline void *folio_get_private(struct folio *folio)
+{
+	return (void *)page_private(&folio->page);
+}
+
+static inline void folio_attach_private(struct folio *folio, void *data)
+{
+	attach_page_private(&folio->page, data);
+}
+
+static inline void *folio_detach_private(struct folio *folio)
+{
+	return detach_page_private(&folio->page);
+}
+
+static inline void folio_set_error(struct folio *folio)
+{
+	SetPageError(&folio->page);
+}
+
+/**
+ * readahead_folio - Get the next folio to read.
+ * @rac: The current readahead request.
+ *
+ * Context: The folio is locked.  The caller should unlock the folio once
+ * all I/O to that folio has completed.
+ * Return: A pointer to the next folio, or %NULL if we are done.
+ */
+static inline struct folio *readahead_folio(struct readahead_control *rac)
+{
+	struct page *page = readahead_page(rac);
+
+	if (!page)
+		return NULL;
+	put_page(page);
+	return page_folio(page);
+}
+
 #endif /* _LINUX_PAGEMAP_H */

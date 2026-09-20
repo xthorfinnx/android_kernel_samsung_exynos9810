@@ -272,6 +272,42 @@ struct page_frag {
 #endif
 };
 
+/**
+ * struct folio - Represents a contiguous set of bytes.
+ *
+ * On this tree the page cache only holds order-0 pages (plus THP head pages),
+ * so a folio is simply a struct page that is known not to be a tail page.
+ * The named fields overlay the corresponding struct page fields exactly as
+ * upstream does (checked by folio_layout_check() below).
+ */
+struct folio {
+	union {
+		struct {
+			unsigned long flags;
+			struct address_space *mapping;
+			pgoff_t index;
+			atomic_t _mapcount;
+			atomic_t _refcount;
+			struct list_head lru;
+			void *private;
+		};
+		struct page page;
+	};
+};
+
+static inline void folio_layout_check(void)
+{
+#define FOLIO_MATCH(pg, fl)						\
+	BUILD_BUG_ON(offsetof(struct page, pg) != offsetof(struct folio, fl))
+	FOLIO_MATCH(flags, flags);
+	FOLIO_MATCH(mapping, mapping);
+	FOLIO_MATCH(index, index);
+	FOLIO_MATCH(_refcount, _refcount);
+	FOLIO_MATCH(lru, lru);
+	FOLIO_MATCH(private, private);
+#undef FOLIO_MATCH
+}
+
 #define PAGE_FRAG_CACHE_MAX_SIZE	__ALIGN_MASK(32768, ~PAGE_MASK)
 #define PAGE_FRAG_CACHE_MAX_ORDER	get_order(PAGE_FRAG_CACHE_MAX_SIZE)
 
