@@ -410,7 +410,11 @@ iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 	struct blk_plug plug;
 	struct iomap_dio *dio;
 
-	lockdep_assert_held(&inode->i_rwsem);
+	/*
+	 * Upstream v5.7 asserts i_rwsem is held here; later versions (which the
+	 * backported EROFS code was written against) don't, and read-only
+	 * filesystems like EROFS take no inode lock for direct reads.
+	 */
 
 	if (!count)
 		return 0;

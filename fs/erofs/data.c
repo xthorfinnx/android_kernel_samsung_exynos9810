@@ -394,8 +394,9 @@ static ssize_t erofs_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 		int err = erofs_prepare_dio(iocb, to);
 
 		if (!err)
-			return iomap_dio_rw(iocb, to, &erofs_iomap_ops,
-					    NULL, 0);
+			/* iomap v5.7 wants wait_for_completion from the caller */
+			return iomap_dio_rw(iocb, to, &erofs_iomap_ops, NULL,
+					    is_sync_kiocb(iocb));
 		if (err < 0)
 			return err;
 	}
