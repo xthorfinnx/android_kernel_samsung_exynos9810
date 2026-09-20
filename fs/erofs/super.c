@@ -686,9 +686,8 @@ static int erofs_fc_fill_super(struct super_block *sb, struct fs_context *fc)
 		if (err)
 			return err;
 
-		err = super_setup_bdi(sb);
-		if (err)
-			return err;
+		/* fscache mode is not supported in this tree (no super_setup_bdi) */
+		return -EOPNOTSUPP;
 	} else {
 		if (!sb_set_blocksize(sb, EROFS_BLKSIZ)) {
 			erofs_err(sb, "failed to set erofs blksize");
