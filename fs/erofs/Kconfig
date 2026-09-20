@@ -79,8 +79,10 @@ config EROFS_FS_ZIP
 config EROFS_FS_ZIP_LZMA
 	bool "EROFS LZMA compressed data support"
 	depends on EROFS_FS_ZIP
+	# lib/xz's MicroLZMA decoder is not backported to this tree, so this can
+	# not be enabled until XZ_DEC_MICROLZMA exists.
+	depends on XZ_DEC_MICROLZMA
 	select XZ_DEC
-	select XZ_DEC_MICROLZMA
 	help
 	  Saying Y here includes support for reading EROFS file systems
 	  containing LZMA compressed data, specifically called microLZMA. it
