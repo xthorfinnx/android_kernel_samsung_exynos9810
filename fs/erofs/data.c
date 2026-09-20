@@ -399,7 +399,13 @@ static ssize_t erofs_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 		if (err < 0)
 			return err;
 	}
-	return filemap_read(iocb, to, 0);
+	/*
+	 * Buffered read (also the fallback for DIO that can't be served by
+	 * iomap): generic_file_read_iter() would try ->direct_IO for
+	 * IOCB_DIRECT, so drop the flag as filemap_read() does not look at it.
+	 */
+	iocb->ki_flags &= ~IOCB_DIRECT;
+	return generic_file_read_iter(iocb, to);
 }
 
 /* for uncompressed (aligned) files and raw access for other files */

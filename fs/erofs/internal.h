@@ -8,6 +8,7 @@
 
 #include <linux/fs.h>
 #include <linux/overflow.h>
+#include <linux/uio.h>
 #include <linux/kobject.h>
 #include <linux/completion.h>
 #include <linux/dcache.h>

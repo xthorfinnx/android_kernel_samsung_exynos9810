@@ -2946,6 +2946,7 @@ static inline ssize_t blockdev_direct_IO(struct kiocb *iocb,
 
 void inode_dio_wait(struct inode *inode);
 void dio_warn_stale_pagecache(struct file *filp);
+ssize_t noop_direct_IO(struct kiocb *iocb, struct iov_iter *iter);
 int sb_init_dio_done_wq(struct super_block *sb);
 
 /*

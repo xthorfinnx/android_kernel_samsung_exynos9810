@@ -1344,3 +1344,21 @@ void generic_set_encrypted_ci_d_ops(struct inode *dir, struct dentry *dentry)
 #endif
 }
 EXPORT_SYMBOL(generic_set_encrypted_ci_d_ops);
+
+/*
+ * Present a ->direct_IO() so that O_DIRECT opens are accepted for
+ * filesystems that serve direct I/O through iomap_dio_rw() from their own
+ * ->read_iter()/->write_iter() and never reach the generic path.
+ * (Upstream: fs/libfs.c noop_direct_IO.)
+ */
+ssize_t noop_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
+{
+	/*
+	 * iomap based filesystems support direct I/O without need for
+	 * this callback. However, it still has to exist in order to
+	 * inform the VFS of this support.
+	 */
+	WARN_ON_ONCE(1);
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(noop_direct_IO);
