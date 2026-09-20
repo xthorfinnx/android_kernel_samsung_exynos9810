@@ -327,9 +327,12 @@ static inline unsigned int erofs_inode_datalayout(unsigned int ifmt)
 static inline struct folio *erofs_grab_folio_nowait(struct address_space *as,
 						    pgoff_t index)
 {
-	return __filemap_get_folio(as, index,
+	struct page *page = pagecache_get_page(as, index,
 			FGP_LOCK|FGP_CREAT|FGP_NOFS|FGP_NOWAIT,
 			readahead_gfp_mask(as) & ~__GFP_RECLAIM);
+
+	/* upstream's __filemap_get_folio() returns an ERR_PTR, not NULL */
+	return page ? page_folio(page) : ERR_PTR(-ENOENT);
 }
 
 /* Has a disk mapping */
