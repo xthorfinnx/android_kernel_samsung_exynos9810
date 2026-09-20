@@ -5,10 +5,12 @@
  * Copyright (C) 2022 Alibaba Cloud
  */
 #include "compress.h"
+#include "tagptr.h"
 #include <linux/prefetch.h>
 #include <linux/mm_inline.h>
 #include <linux/psi.h>
 #include <linux/cpuhotplug.h>
+#include <linux/kthread.h>
 #include <trace/events/erofs.h>
 
 #define Z_EROFS_PCLUSTER_MAX_PAGES	(Z_EROFS_PCLUSTER_MAX_SIZE / PAGE_SIZE)
@@ -110,6 +112,7 @@ struct z_erofs_decompressqueue {
 	union {
 		struct completion done;
 		struct work_struct work;
+		struct kthread_work kthread_work;
 	} u;
 	bool eio, sync;
 };
