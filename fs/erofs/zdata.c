@@ -231,12 +231,12 @@ static int erofs_init_percpu_workers(void)
 	struct kthread_worker *worker;
 	unsigned int cpu;
 
-	z_erofs_pcpu_workers = kcalloc(num_possible_cpus(),
+	z_erofs_pcpu_workers = kcalloc(nr_cpu_ids,
 			sizeof(struct kthread_worker *), GFP_ATOMIC);
 	if (!z_erofs_pcpu_workers)
 		return -ENOMEM;
 
-	for_each_online_cpu(cpu) {	/* could miss cpu{off,on}line? */
+	for_each_possible_cpu(cpu) {
 		worker = erofs_init_percpu_worker(cpu);
 		if (!IS_ERR(worker))
 			rcu_assign_pointer(z_erofs_pcpu_workers[cpu], worker);
@@ -248,67 +248,17 @@ static inline void erofs_destroy_percpu_workers(void) {}
 static inline int erofs_init_percpu_workers(void) { return 0; }
 #endif
 
-#if defined(CONFIG_HOTPLUG_CPU) && defined(CONFIG_EROFS_FS_PCPU_KTHREAD)
-static DEFINE_SPINLOCK(z_erofs_pcpu_worker_lock);
-static enum cpuhp_state erofs_cpuhp_state;
-
-static int erofs_cpu_online(unsigned int cpu)
-{
-	struct kthread_worker *worker, *old;
-
-	worker = erofs_init_percpu_worker(cpu);
-	if (IS_ERR(worker))
-		return PTR_ERR(worker);
-
-	spin_lock(&z_erofs_pcpu_worker_lock);
-	old = rcu_dereference_protected(z_erofs_pcpu_workers[cpu],
-			lockdep_is_held(&z_erofs_pcpu_worker_lock));
-	if (!old)
-		rcu_assign_pointer(z_erofs_pcpu_workers[cpu], worker);
-	spin_unlock(&z_erofs_pcpu_worker_lock);
-	if (old)
-		kthread_destroy_worker(worker);
-	return 0;
-}
-
-static int erofs_cpu_offline(unsigned int cpu)
-{
-	struct kthread_worker *worker;
-
-	spin_lock(&z_erofs_pcpu_worker_lock);
-	worker = rcu_dereference_protected(z_erofs_pcpu_workers[cpu],
-			lockdep_is_held(&z_erofs_pcpu_worker_lock));
-	rcu_assign_pointer(z_erofs_pcpu_workers[cpu], NULL);
-	spin_unlock(&z_erofs_pcpu_worker_lock);
-
-	synchronize_rcu();
-	if (worker)
-		kthread_destroy_worker(worker);
-	return 0;
-}
-
-static int erofs_cpu_hotplug_init(void)
-{
-	int state;
-
-	state = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
-			"fs/erofs:online", erofs_cpu_online, erofs_cpu_offline);
-	if (state < 0)
-		return state;
-
-	erofs_cpuhp_state = state;
-	return 0;
-}
-
-static void erofs_cpu_hotplug_destroy(void)
-{
-	if (erofs_cpuhp_state)
-		cpuhp_remove_state_nocalls(erofs_cpuhp_state);
-}
-#else /* !CONFIG_HOTPLUG_CPU || !CONFIG_EROFS_FS_PCPU_KTHREAD */
+/*
+ * No CPU hotplug callbacks: creating/stopping kthreads from a hotplug
+ * callback deadlocks on 4.9 (cgroup_threadgroup_rwsem is taken before
+ * get_online_cpus() by cgroup attach, while kthreadd needs the former to
+ * fork a worker for the CPU that is coming up).  Workers are therefore
+ * created once for every possible CPU; a worker whose CPU is offline is
+ * simply migrated by the scheduler and only the current CPU's worker is
+ * ever queued to.
+ */
 static inline int erofs_cpu_hotplug_init(void) { return 0; }
 static inline void erofs_cpu_hotplug_destroy(void) {}
-#endif
 
 void z_erofs_exit_zip_subsystem(void)
 {
