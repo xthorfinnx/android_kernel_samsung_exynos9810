@@ -957,7 +957,7 @@ static int z_erofs_scan_folio(struct z_erofs_decompress_frontend *f,
 			erofs_off_t fpos = offset + cur - map->m_la;
 
 			err = z_erofs_read_fragment(inode->i_sb, folio, cur,
-					cur + min(map->m_llen - fpos, end - cur),
+					cur + min_t(u64, map->m_llen - fpos, end - cur),
 					EROFS_I(inode)->z_fragmentoff + fpos);
 			if (err)
 				break;
