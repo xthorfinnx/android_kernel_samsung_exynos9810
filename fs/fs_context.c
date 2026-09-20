@@ -64,7 +64,15 @@ static struct fs_context *alloc_fs_context(struct file_system_type *fs_type,
 	get_filesystem(fs_type);
 	fc->fs_type	= fs_type;
 	fc->cred	= get_current_cred();
-	fc->net_ns	= get_net(current->nsproxy->net_ns);
+	/*
+	 * Upstream takes a reference on the current netns here. Not done in this
+	 * tree: fs_context is first used for the rootfs mount in start_kernel(),
+	 * before net_ns_init(), when init_net.count is still 0 (it is only set to
+	 * 1 by setup_net()) -- dropping the reference again in put_fs_context()
+	 * would bring it back to 0 and call __put_net() -> queue_work(netns_wq),
+	 * with netns_wq still NULL, hanging the boot. Nothing here uses
+	 * fc->net_ns, so it stays NULL.
+	 */
 
 	switch (purpose) {
 	case FS_CONTEXT_FOR_MOUNT:
