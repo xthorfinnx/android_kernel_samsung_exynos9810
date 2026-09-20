@@ -608,7 +608,7 @@ static int erofs_fc_fill_super(struct super_block *sb, struct fs_context *fc)
 	int err;
 
 	sb->s_magic = EROFS_SUPER_MAGIC;
-	sb->s_flags |= SB_RDONLY | SB_NOATIME;
+	sb->s_flags |= MS_RDONLY | MS_NOATIME;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 	sb->s_op = &erofs_sops;
 
