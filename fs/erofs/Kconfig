@@ -5,7 +5,6 @@ config EROFS_FS
 	depends on BLOCK
 	select FS_IOMAP
 	select LIBCRC32C
-	select FS_IOMAP
 	help
 	  EROFS (Enhanced Read-Only File System) is a lightweight
 	  read-only file system with modern designs (eg. page-sized
