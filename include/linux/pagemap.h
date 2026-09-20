@@ -1055,4 +1055,11 @@ static inline void folio_zero_segment(struct folio *folio, size_t start,
 	zero_user_segments(&folio->page, start, xend, 0, 0);
 }
 
+/* filemap_add_folio - add a folio to the page cache and the LRU (upstream v5.16+) */
+static inline int filemap_add_folio(struct address_space *mapping,
+		struct folio *folio, pgoff_t index, gfp_t gfp)
+{
+	return add_to_page_cache_lru(&folio->page, mapping, index, gfp);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
