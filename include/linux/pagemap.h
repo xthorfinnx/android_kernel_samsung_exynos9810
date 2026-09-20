@@ -1062,4 +1062,10 @@ static inline int filemap_add_folio(struct address_space *mapping,
 	return add_to_page_cache_lru(&folio->page, mapping, index, gfp);
 }
 
+static inline bool folio_trylock(struct folio *folio)
+{
+	folio_layout_check();
+	return trylock_page(&folio->page);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
