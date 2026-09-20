@@ -6949,6 +6949,49 @@ static void fill_chanspec_to_channel_info(chanspec_t cur_chanspec,
 	}
 }
 
+/* The Android wifi HAL expects the link stats wrapped in vendor attributes */
+enum {
+	ANDR_WIFI_ATTRIBUTE_NUM_RADIO = 1,
+	ANDR_WIFI_ATTRIBUTE_STATS_INFO = 2
+};
+
+/* wifi_radio_stat as laid out by the 64-bit Android HAL (adds the tx power level fields) */
+typedef struct {
+	wifi_radio radio;
+	uint32 on_time;
+	uint32 tx_time;
+	uint32 num_tx_levels;
+	uint64 tx_time_per_levels;
+	uint32 rx_time;
+	uint32 on_time_scan;
+	uint32 on_time_nbd;
+	uint32 on_time_gscan;
+	uint32 on_time_roam_scan;
+	uint32 on_time_pno_scan;
+	uint32 on_time_hs20;
+	uint32 num_channels;
+} wifi_radio_stat_hal;
+
+static int
+wl_cfgvendor_send_lstats_reply(struct wiphy *wiphy, const void *data, int len)
+{
+	struct sk_buff *skb;
+
+	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, len + 2 * NLA_HDRLEN + sizeof(u32));
+	if (unlikely(!skb)) {
+		WL_ERR(("skb alloc failed"));
+		return -ENOMEM;
+	}
+
+	if (nla_put_u32(skb, ANDR_WIFI_ATTRIBUTE_NUM_RADIO, 1) ||
+	    nla_put(skb, ANDR_WIFI_ATTRIBUTE_STATS_INFO, len, data)) {
+		kfree_skb(skb);
+		return -EMSGSIZE;
+	}
+
+	return cfg80211_vendor_cmd_reply(skb);
+}
+
 static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 	struct wireless_dev *wdev, const void  *data, int len)
 {
@@ -6957,6 +7000,7 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 	int err = 0, ret = 0, i;
 	wifi_radio_stat *radio;
 	wifi_radio_stat_h radio_h;
+	wifi_radio_stat_hal radio_hal;
 	wifi_channel_stat *chan_stats = NULL;
 	uint chan_stats_size = 0;
 #ifdef CHAN_STATS_SUPPORT
@@ -7286,14 +7330,27 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 		cur_channel_stat.cca_busy_time = cca_busy_time;
 	}
 
-	ret = memcpy_s(output, WLC_IOCTL_MAXLEN, &radio_h, sizeof(wifi_radio_stat_h));
+	bzero(&radio_hal, sizeof(radio_hal));
+	radio_hal.radio = radio_h.radio;
+	radio_hal.on_time = radio_h.on_time;
+	radio_hal.tx_time = radio_h.tx_time;
+	radio_hal.rx_time = radio_h.rx_time;
+	radio_hal.on_time_scan = radio_h.on_time_scan;
+	radio_hal.on_time_nbd = radio_h.on_time_nbd;
+	radio_hal.on_time_gscan = radio_h.on_time_gscan;
+	radio_hal.on_time_roam_scan = radio_h.on_time_roam_scan;
+	radio_hal.on_time_pno_scan = radio_h.on_time_pno_scan;
+	radio_hal.on_time_hs20 = radio_h.on_time_hs20;
+	radio_hal.num_channels = radio_h.num_channels;
+
+	ret = memcpy_s(output, WLC_IOCTL_MAXLEN, &radio_hal, sizeof(radio_hal));
 	if (ret) {
-		WL_ERR(("Failed to copy wifi_radio_stat_h: %d\n", ret));
+		WL_ERR(("Failed to copy wifi_radio_stat_hal: %d\n", ret));
 		goto exit;
 	}
-	output += sizeof(wifi_radio_stat_h);
+	output += sizeof(radio_hal);
 
-	ret = memcpy_s(output, (WLC_IOCTL_MAXLEN - sizeof(wifi_radio_stat_h)),
+	ret = memcpy_s(output, (WLC_IOCTL_MAXLEN - sizeof(radio_hal)),
 		chan_stats, chan_stats_size);
 	if (ret) {
 		WL_ERR(("Failed to copy wifi_channel_stat: %d\n", ret));
@@ -7416,7 +7473,7 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 		output += sizeof(p_wifi_rate_stat_v1->retries_long);
 	}
 
-	total_len = sizeof(wifi_radio_stat_h) + chan_stats_size;
+	total_len = sizeof(radio_hal) + chan_stats_size;
 	total_len = total_len - sizeof(wifi_peer_info) +
 		NUM_PEER * (sizeof(wifi_peer_info) - sizeof(wifi_rate_stat_v1) +
 			NUM_RATE * sizeof(wifi_rate_stat_v1));
@@ -7426,7 +7483,7 @@ static int wl_cfgvendor_lstats_get_info(struct wiphy *wiphy,
 		err = BCME_BADLEN;
 		goto exit;
 	}
-	err =  wl_cfgvendor_send_cmd_reply(wiphy, outdata, total_len);
+	err = wl_cfgvendor_send_lstats_reply(wiphy, outdata, total_len);
 
 	if (unlikely(err))
 		WL_ERR(("Vendor Command reply failed ret:%d \n", err));
