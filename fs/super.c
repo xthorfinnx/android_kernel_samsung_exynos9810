@@ -758,6 +758,42 @@ int get_tree_bdev(struct fs_context *fc,
 }
 EXPORT_SYMBOL(get_tree_bdev);
 
+/*
+ * get_tree_nodev - Get a superblock not backed by a device
+ * @fc: The filesystem context holding the parameters
+ * @fill_super: Helper to initialise a new superblock
+ *
+ * Counterpart of upstream get_tree_nodev(), adapted to this tree's
+ * sget_fc()/set_anon_super() shapes.
+ */
+static int set_anon_super_fc(struct super_block *s, struct fs_context *fc)
+{
+	return set_anon_super(s, NULL);
+}
+
+int get_tree_nodev(struct fs_context *fc,
+		   int (*fill_super)(struct super_block *,
+				     struct fs_context *))
+{
+	struct super_block *s;
+	int error;
+
+	s = sget_fc(fc, NULL, set_anon_super_fc);
+	if (IS_ERR(s))
+		return PTR_ERR(s);
+
+	error = fill_super(s, fc);
+	if (error) {
+		deactivate_locked_super(s);
+		return error;
+	}
+	s->s_flags |= MS_ACTIVE;
+	BUG_ON(fc->root);
+	fc->root = dget(s->s_root);
+	return 0;
+}
+EXPORT_SYMBOL(get_tree_nodev);
+
 void drop_super(struct super_block *sb)
 {
 	up_read(&sb->s_umount);
