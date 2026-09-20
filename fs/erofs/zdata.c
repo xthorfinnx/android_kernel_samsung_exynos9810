@@ -909,7 +909,7 @@ static int z_erofs_read_fragment(struct super_block *sb, struct folio *folio,
 
 	buf.mapping = packed_inode->i_mapping;
 	for (; cur < end; cur += cnt, pos += cnt) {
-		cnt = min(end - cur, sb->s_blocksize - erofs_blkoff(sb, pos));
+		cnt = min_t(u64, end - cur, sb->s_blocksize - erofs_blkoff(sb, pos));
 		src = erofs_bread(&buf, pos, EROFS_KMAP);
 		if (IS_ERR(src)) {
 			erofs_put_metabuf(&buf);
