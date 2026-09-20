@@ -58,6 +58,26 @@ void z_erofs_put_gbuf(void *ptr) __releases(gbuf->lock)
 	spin_unlock(&gbuf->lock);
 }
 
+/*
+ * 4.9 has neither migrate_disable() nor alloc_pages_bulk_array().  Preemption
+ * is off between picking the gbuf and taking its lock (which is what
+ * migrate_disable() protects upstream); the bulk allocator is a plain loop.
+ */
+static unsigned int z_erofs_alloc_pages_bulk_array(gfp_t gfp, unsigned int nr,
+						   struct page **pages)
+{
+	unsigned int i;
+
+	for (i = 0; i < nr; ++i) {
+		if (pages[i])
+			continue;
+		pages[i] = alloc_page(gfp);
+		if (!pages[i])
+			break;
+	}
+	return i;
+}
+
 int z_erofs_gbuf_growsize(unsigned int nrpages)
 {
 	static DEFINE_MUTEX(gbuf_resize_mutex);
@@ -83,7 +103,7 @@ int z_erofs_gbuf_growsize(unsigned int nrpages)
 			tmp_pages[j] = gbuf->pages[j];
 		do {
 			last = j;
-			j = alloc_pages_bulk_array(GFP_KERNEL, nrpages,
+			j = z_erofs_alloc_pages_bulk_array(GFP_KERNEL, nrpages,
 						   tmp_pages);
 			if (last == j)
 				goto out;
