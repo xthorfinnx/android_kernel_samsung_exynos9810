@@ -1040,4 +1040,12 @@ static inline struct folio *read_cache_folio(struct address_space *mapping,
 	return page_folio(page);
 }
 
+/* folio_end_read - End reading on a folio (upstream v6.9) */
+static inline void folio_end_read(struct folio *folio, bool success)
+{
+	if (likely(success))
+		folio_mark_uptodate(folio);
+	folio_unlock(folio);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
