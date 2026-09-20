@@ -492,7 +492,7 @@ static const struct address_space_operations managed_cache_aops;
 static bool erofs_managed_cache_release_folio(struct folio *folio, gfp_t gfp)
 {
 	bool ret = true;
-	struct address_space *const mapping = folio->mapping;
+	struct address_space *const mapping = folio_mapping(folio);
 
 	DBG_BUGON(!folio_test_locked(folio));
 	DBG_BUGON(mapping->a_ops != &managed_cache_aops);
@@ -518,9 +518,25 @@ static void erofs_managed_cache_invalidate_folio(struct folio *folio,
 			cond_resched();
 }
 
+/*
+ * This tree's VFS still calls the page-based ->releasepage/->invalidatepage
+ * hooks, so bridge them to the folio implementations above.
+ */
+static int erofs_managed_cache_releasepage(struct page *page, gfp_t gfp)
+{
+	return erofs_managed_cache_release_folio(page_folio(page), gfp);
+}
+
+static void erofs_managed_cache_invalidatepage(struct page *page,
+					       unsigned int offset,
+					       unsigned int length)
+{
+	erofs_managed_cache_invalidate_folio(page_folio(page), offset, length);
+}
+
 static const struct address_space_operations managed_cache_aops = {
-	.release_folio = erofs_managed_cache_release_folio,
-	.invalidate_folio = erofs_managed_cache_invalidate_folio,
+	.releasepage = erofs_managed_cache_releasepage,
+	.invalidatepage = erofs_managed_cache_invalidatepage,
 };
 
 static int erofs_init_managed_cache(struct super_block *sb)
