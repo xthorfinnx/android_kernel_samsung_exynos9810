@@ -1068,4 +1068,11 @@ static inline bool folio_trylock(struct folio *folio)
 	return trylock_page(&folio->page);
 }
 
+static inline void memcpy_to_folio(struct folio *folio, size_t offset,
+				   const char *from, size_t len)
+{
+	memcpy_to_page(&folio->page, offset, from, len);
+	flush_dcache_page(&folio->page);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
