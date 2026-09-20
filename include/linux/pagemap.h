@@ -1075,4 +1075,10 @@ static inline void memcpy_to_folio(struct folio *folio, size_t offset,
 	flush_dcache_page(&folio->page);
 }
 
+static inline struct folio *read_mapping_folio(struct address_space *mapping,
+		pgoff_t index, struct file *file)
+{
+	return read_cache_folio(mapping, index, NULL, file);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
