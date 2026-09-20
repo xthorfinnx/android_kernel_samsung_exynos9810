@@ -1024,4 +1024,20 @@ static inline struct folio *readahead_folio(struct readahead_control *rac)
 	return page_folio(page);
 }
 
+/* read_cache_folio(): page-cache read of one folio, layered on read_cache_page() */
+static inline struct folio *read_cache_folio(struct address_space *mapping,
+		pgoff_t index, filler_t *filler, struct file *file)
+{
+	struct page *page;
+
+	/* 4.9's read_cache_page() has no NULL-filler fallback (unlike v5.x) */
+	if (!filler)
+		filler = (filler_t *)mapping->a_ops->readpage;
+	page = read_cache_page(mapping, index, filler, file);
+
+	if (IS_ERR(page))
+		return ERR_CAST(page);
+	return page_folio(page);
+}
+
 #endif /* _LINUX_PAGEMAP_H */
