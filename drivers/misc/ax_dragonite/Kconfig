@@ -1,0 +1,9 @@
+config AX_DRAGONITE
+	tristate "AxionOS AxDragonite performance driver"
+	depends on PROC_FS
+	help
+	  Exposes /proc/ax_dragonite and /proc/ax_named_thread_affinity,
+	  used by the AxionOS system_server to boost task priority, pin
+	  kswapd and set per-thread CPU affinity.
+
+	  If unsure, say N.

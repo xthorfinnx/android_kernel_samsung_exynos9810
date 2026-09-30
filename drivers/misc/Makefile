@@ -71,6 +71,7 @@ CFLAGS_lkdtm_rodata.o		+= $(DISABLE_LTO)
 KCOV_INSTRUMENT_lkdtm_rodata.o	:= n
 
 obj-$(CONFIG_TIMA_LOG)		+= tima_debug_log.o
+obj-$(CONFIG_AX_DRAGONITE)	+= ax_dragonite/
 
 OBJCOPYFLAGS :=
 OBJCOPYFLAGS_lkdtm_rodata_objcopy.o := \
