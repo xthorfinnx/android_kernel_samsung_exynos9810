@@ -183,6 +183,44 @@ int ida_simple_get(struct ida *ida, unsigned int start, unsigned int end,
 		   gfp_t gfp_mask);
 void ida_simple_remove(struct ida *ida, unsigned int id);
 
+/*
+ * ida_alloc_range() and friends (upstream 5ade60dda43c "ida: Add new API").
+ * This tree still has the pre-4.11 IDA, so map them onto ida_simple_get()
+ * and ida_simple_remove(), which take an exclusive end instead of an
+ * inclusive max.
+ */
+static inline int ida_alloc_range(struct ida *ida, unsigned int min,
+				  unsigned int max, gfp_t gfp)
+{
+	if ((int)min < 0)
+		return -ENOSPC;
+	if ((int)max < 0)
+		max = INT_MAX;
+	if (max < min)
+		return -ENOSPC;
+	return ida_simple_get(ida, min, max == INT_MAX ? 0 : max + 1, gfp);
+}
+
+static inline int ida_alloc(struct ida *ida, gfp_t gfp)
+{
+	return ida_alloc_range(ida, 0, ~0, gfp);
+}
+
+static inline int ida_alloc_min(struct ida *ida, unsigned int min, gfp_t gfp)
+{
+	return ida_alloc_range(ida, min, ~0, gfp);
+}
+
+static inline int ida_alloc_max(struct ida *ida, unsigned int max, gfp_t gfp)
+{
+	return ida_alloc_range(ida, 0, max, gfp);
+}
+
+static inline void ida_free(struct ida *ida, unsigned int id)
+{
+	ida_simple_remove(ida, id);
+}
+
 /**
  * ida_get_new - allocate new ID
  * @ida:	idr handle
