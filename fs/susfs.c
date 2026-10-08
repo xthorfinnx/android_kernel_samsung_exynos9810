@@ -1093,9 +1093,8 @@ static int susfs_handle_sdcard_inode_event(struct fsnotify_group *group,
 											struct inode *to_tell,
 											struct fsnotify_mark *inode_mark,
 											struct fsnotify_mark *vfsmount_mark,
-											u32 mask, const void *data, int data_type,
-											const unsigned char *file_name, u32 cookie,
-											struct fsnotify_iter_info *iter_info)
+											u32 mask, void *data, int data_type,
+											const unsigned char *file_name, u32 cookie)
 {
 	static bool target_path_is_found = false;
 
@@ -1125,6 +1124,11 @@ static const struct fsnotify_ops fsnotify_ops = {
 	.handle_event = susfs_handle_sdcard_inode_event,
 };
 
+static void susfs_free_sdcard_mark(struct fsnotify_mark *mark)
+{
+	kfree(mark);
+}
+
 static int add_mark_on_inode(struct inode *inode, u32 mask,
 								struct fsnotify_mark **out)
 {
@@ -1134,10 +1138,10 @@ static int add_mark_on_inode(struct inode *inode, u32 mask,
 	if (!m)
 		return -ENOMEM;
 
-	fsnotify_init_mark(m, g);
+	fsnotify_init_mark(m, susfs_free_sdcard_mark);
 	m->mask = mask;
 
-	if (fsnotify_add_mark(m, inode, NULL, 0)) {
+	if (fsnotify_add_mark(m, g, inode, NULL, 0)) {
 		fsnotify_put_mark(m);
 		return -EINVAL;
 	}
